@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.1300
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityNet", "UnityNet\UnityNet.csproj", "{EC8C5ED6-454D-47A9-B166-40DAB8A97435}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityNetTest", "UnityNetTest\UnityNetTest.csproj", "{82CA42C7-CB96-471B-AEDB-BA179D63EC6A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestConsole", "TestConsole\TestConsole.csproj", "{6207466E-B0A0-4459-BA82-322EA06BB30B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EC8C5ED6-454D-47A9-B166-40DAB8A97435}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC8C5ED6-454D-47A9-B166-40DAB8A97435}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC8C5ED6-454D-47A9-B166-40DAB8A97435}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC8C5ED6-454D-47A9-B166-40DAB8A97435}.Release|Any CPU.Build.0 = Release|Any CPU
+		{82CA42C7-CB96-471B-AEDB-BA179D63EC6A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82CA42C7-CB96-471B-AEDB-BA179D63EC6A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82CA42C7-CB96-471B-AEDB-BA179D63EC6A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82CA42C7-CB96-471B-AEDB-BA179D63EC6A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6207466E-B0A0-4459-BA82-322EA06BB30B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6207466E-B0A0-4459-BA82-322EA06BB30B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6207466E-B0A0-4459-BA82-322EA06BB30B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6207466E-B0A0-4459-BA82-322EA06BB30B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7B20FB61-6116-4CB3-ABD3-B6DCEB9A9FE8}
+	EndGlobalSection
+EndGlobal
