@@ -5,22 +5,37 @@ using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public sealed class TcpListener : UNetSocket
+    public sealed class TcpListener : IDisposable
     {
         public const int SOMAXCONN = ushort.MaxValue;
+
 #pragma warning disable IDE0032, IDE0044
+        private bool m_isDisposed = false;
         private bool m_isActive = false;
+        private byte[] m_sharedBuffer = null;
+        private BufferOptions m_bufferOptions;
+        private Socket m_socket;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
         /// Indicates if the listener is listening on a port.
         /// </summary>
-        private bool IsActive
+        public bool IsActive
         {
             get { return m_isActive; }
         }
-
-
+        /// <summary>
+        /// Gets/Sets the blocking state of the underlying socket.
+        /// </summary>
+        public bool Blocking
+        {
+            get { return m_socket.Blocking; }
+            set
+            {
+                if (m_socket.Handle != IntPtr.Zero)
+                    m_socket.Blocking = value;
+            }
+        }
         /// <summary>
         /// Get the port to which the socket is bound locally.
         /// If the socket is not listening to a port, this property returns 0.
@@ -29,40 +44,81 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_endpoint == null)
+                if (m_socket.LocalEndPoint == null)
                     return 0;
-                return (ushort)m_endpoint.Port;
+                return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
             }
         }
         public IPAddress BoundAddress
         {
             get
             {
-                if (m_endpoint == null)
+                if (m_socket.LocalEndPoint == null)
                     return IPAddress.None;
-                return m_endpoint.Address;
+                return ((IPEndPoint)m_socket.LocalEndPoint).Address;
             }
         }
 
+        /// <summary>
+        /// Creates a TcpListener.
+        /// </summary>
         public TcpListener()
-            : base(SocketType.TCP)
-        { }
-
-        private TcpListener(IPAddress address, ushort port)
-            : base(SocketType.TCP)
         {
-            m_endpoint = new IPEndPoint(address, port);
+            m_socket = CreateListener();
+
+            m_sharedBuffer = null;
+            m_bufferOptions = BufferOptions.DEFAULT();
         }
 
         /// <summary>
-        /// Creates a TcpListener that listens on both IPv4 and IPv6 on the given port.
+        /// Creates a TcpListener with a user-defined buffer.
         /// </summary>
-        /// <param name="port">The port to listen on.</param>
-        public static TcpListener Create(ushort port)
+        /// <param name="sharedBuffer">The Read/Write buffer that the connected sockets will use.</param>
+        public TcpListener(byte[] sharedBuffer)
         {
-            var listener = new TcpListener(IPAddress.IPv6Any, port);
-            listener.Socket.DualMode = true;
-            return listener;
+            if (sharedBuffer == null)
+                throw new ArgumentNullException("buffer");
+
+            if (sharedBuffer.Length < BufferOptions.MIN_BUFFER_SIZE)
+                throw new ArgumentException("Buffer needs to have a minimum size of " + BufferOptions.MIN_BUFFER_SIZE);
+
+            m_socket = CreateListener();
+
+            m_sharedBuffer = sharedBuffer;
+            m_bufferOptions = new BufferOptions((ushort)sharedBuffer.Length, true);
+        }
+
+        /// <summary>
+        /// Creates a TcpListener.
+        /// </summary>
+        /// <param name="bufferOptions">The options for the buffer that the connected sockets will use.</param>
+        public TcpListener(BufferOptions bufferOptions)
+        {
+            m_socket = CreateListener();
+
+            m_sharedBuffer = null;
+            m_bufferOptions = bufferOptions;
+
+            if (bufferOptions.UseSharedBuffer)
+                m_sharedBuffer = new byte[bufferOptions.BufferSize];
+        }
+
+        ~TcpListener()
+        {
+            Dispose();
+        }
+
+        private Socket CreateListener()
+        {
+            var sock = new Socket(AddressFamily.InterNetworkV6, System.Net.Sockets.SocketType.Stream, ProtocolType.Tcp)
+            {
+                DualMode = true,
+                Blocking = false,
+                NoDelay = true
+            };
+            sock.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+
+            return sock;
         }
 
         public void AllowNatTraversal(bool isallowed)
@@ -73,9 +129,9 @@ namespace UnityNet.Tcp
             else
             {
                 if (isallowed)
-                    Socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
+                    m_socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
                 else
-                    Socket.SetIPProtectionLevel(IPProtectionLevel.EdgeRestricted);
+                    m_socket.SetIPProtectionLevel(IPProtectionLevel.EdgeRestricted);
             }
         }
 
@@ -92,7 +148,7 @@ namespace UnityNet.Tcp
         /// <param name="port">Port to listen on for incoming connection attempts</param>
         public SocketStatus Listen(ushort port)
         {
-            return Listen(new IPEndPoint(IPAddress.Any, port));
+            return Listen(new IPEndPoint(IPAddress.IPv6Any, port));
         }
 
         /// <summary>
@@ -135,16 +191,17 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            m_endpoint = endpoint ?? throw new ArgumentNullException("endpoint");
+            if (endpoint == null)
+                throw new ArgumentNullException("endpoint");
 
-            Socket.Bind(m_endpoint);
+            m_socket.Bind(endpoint);
             try
             {
-                Socket.Listen(SOMAXCONN);
+                m_socket.Listen(SOMAXCONN);
             }
             catch (Exception ex)
             {
-                Close();
+                Close(true);
                 Logger.Error(ex);
                 return SocketStatus.Error;
             }
@@ -162,25 +219,59 @@ namespace UnityNet.Tcp
         /// <param name="socket">Socket that will hold the new connection</param>
         public SocketStatus Accept(out TcpSocket socket)
         {
-            if (!Socket.Poll(0, SelectMode.SelectRead))
+            if (!m_socket.IsBound)
             {
                 Logger.Error("Failed to accept a new connection, the socket is not listening.");
-
                 socket = null;
                 return SocketStatus.Error;
             }
 
-            socket = new TcpSocket(Socket.Accept());
+            if (!m_socket.Poll(0, SelectMode.SelectRead))
+            {
+                socket = null;
+                return SocketStatus.Disconnected;
+            }
+
+            socket = CreateTcpSocket(m_socket.Accept());
             return SocketStatus.Done;
         }
 
-        public override void Close()
+        private TcpSocket CreateTcpSocket(Socket socket)
         {
-            Socket.Close();
-            Socket = null;
+            if (m_bufferOptions.UseSharedBuffer)
+                return new TcpSocket(socket, m_sharedBuffer);
+            else
+                return new TcpSocket(socket, m_bufferOptions.BufferSize);
+        }
 
+        /// <summary>
+        /// Closes the network connection.
+        /// </summary>
+        public void Close(bool reuseListener)
+        {
+            if (m_socket.IsBound)
+            {
+                m_socket.Close();
+                m_socket = null;
+
+                if (reuseListener)
+                    m_socket = CreateListener();
+            }
             m_isActive = false;
-            Socket = CreateTcpSocket();
+        }
+
+        /// <summary>
+        /// Disposes the TcpListener.
+        /// </summary>
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            if (!m_isDisposed)
+            {
+                m_socket.Close();
+                m_isDisposed = true;
+                m_isActive = false;
+            }
         }
     }
 }

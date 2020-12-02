@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace UnityNet
+namespace UnityNetTest.TcpTests
 {
-    public enum SocketType : byte
+    class TcpListenerTests
     {
-        TCP
     }
 }

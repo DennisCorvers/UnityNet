@@ -7,8 +7,26 @@ using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public class TcpSocket : UNetSocket
+    public sealed class TcpSocket
     {
+#pragma warning disable IDE0032, IDE0044
+        private bool m_isDisposed = false;
+        private Socket m_socket;
+        private byte[] m_buffer;
+#pragma warning restore IDE0032, IDE0044
+
+        /// <summary>
+        /// Gets/Sets the blocking state of the underlying socket.
+        /// </summary>
+        public bool Blocking
+        {
+            get { return m_socket.Blocking; }
+            set
+            {
+                if (m_socket.Handle != IntPtr.Zero)
+                    m_socket.Blocking = value;
+            }
+        }
         /// <summary>
         /// Get the port to which the socket is remotely connected.
         /// If the socket is not connected, this property returns 0.
@@ -17,9 +35,9 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_endpoint == null)
+                if (m_socket.RemoteEndPoint == null)
                     return 0;
-                return (ushort)m_endpoint.Port;
+                return (ushort)((IPEndPoint)m_socket.RemoteEndPoint).Port;
             }
         }
         /// <summary>
@@ -27,7 +45,12 @@ namespace UnityNet.Tcp
         /// </summary>
         public ushort LocalPort
         {
-            private set; get;
+            get
+            {
+                if (m_socket.LocalEndPoint == null)
+                    return 0;
+                return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
+            }
         }
         /// <summary>
         /// Get the the address to which the socket is remotely connected.
@@ -36,9 +59,9 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_endpoint == null)
+                if (m_socket.RemoteEndPoint == null)
                     return IPAddress.None;
-                return m_endpoint.Address;
+                return ((IPEndPoint)m_socket.RemoteEndPoint).Address;
             }
         }
 
@@ -47,144 +70,321 @@ namespace UnityNet.Tcp
         /// </summary>
         public int ReceiveBufferSize
         {
-            get
-            { return Socket.ReceiveBufferSize; }
-            set
-            { Socket.ReceiveBufferSize = value; }
+            get { return m_socket.ReceiveBufferSize; }
+            set { m_socket.ReceiveBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the size of the send buffer in bytes.
         /// </summary>
         public int SendBufferSize
         {
-            get
-            { return Socket.SendBufferSize; }
-            set
-            { Socket.SendBufferSize = value; }
+            get { return m_socket.SendBufferSize; }
+            set { m_socket.SendBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the receive time out value of the connection in seconds.
         /// </summary>
-        protected int ReceiveTimeout
+        public int ReceiveTimeout
         {
-            get
-            { return Socket.ReceiveTimeout; }
-            set
-            { Socket.ReceiveTimeout = value; }
+            get { return m_socket.ReceiveTimeout; }
+            set { m_socket.ReceiveTimeout = value; }
         }
         /// <summary>
         /// Gets or sets the send time out value of the connection in seconds.
         /// </summary>
-        protected int SendTimeout
+        public int SendTimeout
         {
-            get
-            { return Socket.SendTimeout; }
-            set
-            { Socket.SendTimeout = value; }
+            get { return m_socket.SendTimeout; }
+            set { m_socket.SendTimeout = value; }
         }
 
-        public int Available
-        {
-            get
-            { return Socket.Available; }
-        }
+        /// <summary>
+        /// Indicates whether the underlying socket is connected.
+        /// </summary>
         public bool Connected
         {
             get
-            { return Socket.Connected; }
+            { return m_socket.Connected; }
         }
-        public bool ExclusiveAddressUse
+
+        private bool ExclusiveAddressUse
         {
             get
             {
-                return Socket.ExclusiveAddressUse;
+                return m_socket.ExclusiveAddressUse;
             }
             set
             {
-                Socket.ExclusiveAddressUse = value;
+                m_socket.ExclusiveAddressUse = value;
             }
         }
 
+        /// <summary>
+        /// Creates a new TcpSocket with an internal buffer.
+        /// </summary>
         public TcpSocket()
-            : base(SocketType.TCP)
+        {
+            m_socket = CreateSocket();
+            m_buffer = new byte[BufferOptions.MIN_BUFFER_SIZE];
+        }
+
+        /// <summary>
+        /// Creates a new TcpSocket with a user-defined buffer.
+        /// </summary>
+        /// <param name="buffer">The Send/Receive buffer.</param>
+        public TcpSocket(byte[] buffer)
+            : this()
+        {
+            if (buffer == null)
+                throw new ArgumentNullException("buffer");
+
+            UNetDebug.Assert(buffer.Length >= BufferOptions.MIN_BUFFER_SIZE,
+                "Buffer needs to have a minimum size of " + BufferOptions.MIN_BUFFER_SIZE);
+
+            m_buffer = buffer;
+        }
+
+        internal TcpSocket(Socket socket, ushort bufferSize)
+            : this(socket, new byte[bufferSize])
         { }
 
-        internal TcpSocket(Socket socket)
-            : base(socket)
-        { }
+        internal TcpSocket(Socket socket, byte[] buffer)
+        {
+            m_socket = ConfigureSocket(socket);
+            m_buffer = buffer;
+        }
 
+        ~TcpSocket()
+        {
+            Dispose();
+        }
+
+        /// <summary>
+        /// Configures a socket.
+        /// </summary>
+        private static Socket ConfigureSocket(Socket socket)
+        {
+            socket.Blocking = false;
+            socket.NoDelay = true;
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+
+            return socket;
+        }
+
+        /// <summary>
+        /// Creates and configures a new socket.
+        /// </summary>
+        private Socket CreateSocket()
+        {
+            return ConfigureSocket(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp));
+        }
+
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="address">The Ip Address of the remote host</param>
+        /// <param name="port">The port of the remote host</param>
         public SocketStatus Connect(IPAddress address, ushort port)
         {
             return Connect(new IPEndPoint(address, port), 0);
         }
 
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="endpoint">The endpoint of the remote host</param>
         public SocketStatus Connect(IPEndPoint endpoint)
         {
             return Connect(endpoint, 0);
         }
 
-        public SocketStatus Connect(IPAddress address, ushort port, uint timeout)
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="address">The Ip Address of the remote host</param>
+        /// <param name="port">The port of the remote host</param>
+        /// <param name="timeout">The timeout in seconds to wait for a connection</param>
+        public SocketStatus Connect(IPAddress address, ushort port, int timeout)
         {
             return Connect(new IPEndPoint(address, port), timeout);
         }
 
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="hostname">The hostname of the remote host</param>
+        /// <param name="port">The port of the remote host</param>
+        /// <returns></returns>
         public SocketStatus Connect(string hostname, ushort port)
+        {
+            return Connect(hostname, port, 0);
+        }
+
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="hostname">The hostname of the remote host</param>
+        /// <param name="port">The port of the remote host</param>
+        /// <returns></returns>
+        public SocketStatus Connect(string hostname, ushort port, int timeout)
         {
             if (hostname == null)
                 throw new ArgumentNullException("hostname");
 
-            IPAddress[] addresses = Dns.GetHostAddresses(hostname);
-            foreach (var address in addresses)
+            IPAddress[] addresses = null;
+            try
             {
-                return Connect(address, port);
+                addresses = Dns.GetHostAddresses(hostname);
+            }
+            catch (SocketException)
+            {
+                Logger.Error("Unable to resolve hostname " + hostname);
+                return SocketStatus.Error;
             }
 
-            Logger.Error("No IpAddress for hostname " + hostname);
+            foreach (var address in addresses)
+            {
+                if (address.AddressFamily == AddressFamily.InterNetwork)
+                    return Connect(new IPEndPoint(address, port), timeout);
+            }
+
             return SocketStatus.Error;
         }
 
-        private SocketStatus Connect(IPEndPoint endpoint, uint timeout)
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="endpoint">The endpoint of the remote host</param>
+        /// <param name="timeout">The timeout in seconds to wait for a connection</param>
+        public SocketStatus Connect(IPEndPoint endpoint, int timeout)
         {
-            //Always disconnect first...
-            Close();
+            if (endpoint == null)
+                throw new ArgumentNullException("endpoint");
 
-            m_endpoint = endpoint ?? throw new ArgumentNullException("endpoint");
+            UNetDebug.Assert(!m_socket.Connected, "Socket is already connected.");
 
-            if (timeout == 0)
+            if (m_isDisposed)
+                throw new InvalidOperationException("TcpSocket was disposed.");
+
+            if (timeout <= 0)
             {
-                try
-                {
-                    Socket.Connect(endpoint);
-                }
-                catch (Exception ex)
-                {
-                    Close();
-                    Logger.Error(ex);
-                    return SocketStatus.Error;
-                }
-
-                return SocketStatus.Done;
+                return InnerConnect(endpoint);
             }
             else
             {
-                //TODO Connect with delay?
-                //Save the previous blocking state
-                bool blocking = Blocking;
+                //Same previous socket information
+                bool blockState = Blocking;
 
-                Blocking = false;
                 try
                 {
-                    Socket.Connect(endpoint);
+                    var connectResult = m_socket.BeginConnect(endpoint, null, null);
+                    var success = connectResult.AsyncWaitHandle.WaitOne(timeout * 1000);
+
+                    if (m_socket.Connected)
+                        return SocketStatus.Done;
+                    return SocketStatus.Disconnected;
                 }
                 catch (Exception ex)
                 {
-                    Close();
                     Logger.Error(ex);
                     return SocketStatus.Error;
                 }
             }
+        }
+
+        private SocketStatus InnerConnect(EndPoint endpoint)
+        {
+            try
+            {
+                m_socket.Connect(endpoint);
+            }
+            catch (SocketException ex)
+            {
+                Logger.Error(ex);
+                return SocketStatus.Error;
+            }
+
+            if (m_socket.Connected)
+                return SocketStatus.Done;
+
+            return SocketStatus.Disconnected;
+        }
+
+        /// <summary>
+        /// Sends data over the socket.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="size">The size of the payload.</param>
+        /// <param name="bytesSent">The amount of bytes that have been successfully sent.</param>
+        public SocketStatus Send(IntPtr data, int size, ref int bytesSent)
+        {
+            if (data == IntPtr.Zero || size == 0)
+            {
+                Logger.Error("Cannot send data over the network. No data to send.");
+                return SocketStatus.Error;
+            }
+
+            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L235
+            bytesSent = 0;
 
             return SocketStatus.Error;
+        }
+
+        public SocketStatus Send(byte[] data, ref int bytesSent)
+        {
+            throw new NotImplementedException();
+        }
+
+        //public SocketStatus Send(MyPacket)
+        //{
+        //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
+        //}
+
+        public SocketStatus Receive(IntPtr data, int size, ref int received)
+        {
+            received = 0;
+
+            if (data == IntPtr.Zero)
+                throw new ArgumentNullException("data");
+
+            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L268
+            //Poll socket to check disconnect?
+            return SocketStatus.Error;
+        }
+
+        public SocketStatus Receive(byte[] data, ref int received)
+        {
+            //TODO Use STACKALLOC BUFFER INSTEAD?? NO GC!
+            throw new NotImplementedException();
+        }
+
+        //public SocketStatus Receive(MyPacket)
+        //{
+        //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L345
+        //}
+
+        /// <summary>
+        /// Closes the network connection
+        /// </summary>
+        /// <param name="reuseSocket">TRUE to create a new underlying socket.</param>
+        public void Close(bool reuseSocket)
+        {
+            if (Connected)
+            {
+                m_socket.Close();
+                if (reuseSocket)
+                    m_socket = CreateSocket();
+            }
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+            if (!m_isDisposed)
+            {
+                m_socket.Close();
+                m_isDisposed = true;
+            }
         }
     }
 }
