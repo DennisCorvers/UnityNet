@@ -9,6 +9,8 @@ namespace UnityNet.Tcp
 {
     public sealed class TcpSocket
     {
+        public const int BUFFER_SIZE = 1024;
+
 #pragma warning disable IDE0032, IDE0044
         private bool m_isDisposed = false;
         private Socket m_socket;
@@ -125,7 +127,7 @@ namespace UnityNet.Tcp
         public TcpSocket()
         {
             m_socket = CreateSocket();
-            m_buffer = new byte[BufferOptions.MIN_BUFFER_SIZE];
+            m_buffer = new byte[BUFFER_SIZE];
         }
 
         /// <summary>
@@ -138,8 +140,7 @@ namespace UnityNet.Tcp
             if (buffer == null)
                 throw new ArgumentNullException("buffer");
 
-            UNetDebug.Assert(buffer.Length >= BufferOptions.MIN_BUFFER_SIZE,
-                "Buffer needs to have a minimum size of " + BufferOptions.MIN_BUFFER_SIZE);
+            UNetDebug.Assert(buffer.Length >= BUFFER_SIZE);
 
             m_buffer = buffer;
         }
@@ -315,24 +316,80 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="size">The size of the payload.</param>
-        /// <param name="bytesSent">The amount of bytes that have been successfully sent.</param>
-        public SocketStatus Send(IntPtr data, int size, ref int bytesSent)
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public unsafe SocketStatus Send(IntPtr data, int size, out int sent)
         {
+            sent = 0;
+
             if (data == IntPtr.Zero || size == 0)
             {
                 Logger.Error("Cannot send data over the network. No data to send.");
                 return SocketStatus.Error;
             }
 
-            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L235
-            bytesSent = 0;
+            int result = 0;
+            for (sent = 0; sent < size; sent += result)
+            {
+                int len = Unsafe.CopyToBuffer(m_buffer, (byte*)data, size - sent);
+                var socketError = Send(m_buffer, len, out result);
+            }
 
-            return SocketStatus.Error;
+            return SocketStatus.Done;
         }
 
-        public SocketStatus Send(byte[] data, ref int bytesSent)
+        /// <summary>
+        /// Sends data over the socket.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        public SocketStatus Send(byte[] data)
         {
-            throw new NotImplementedException();
+            return Send(data, out int bytesSent);
+        }
+
+        /// <summary>
+        /// Sends data over the socket.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="sent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, out int sent)
+        {
+            return Send(data, data.Length, out sent);
+        }
+
+        /// <summary>
+        /// Sends data over the socket.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="size">The amount of data to send.</param>
+        /// <param name="sent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, int size, out int sent)
+        {
+            sent = 0;
+
+            if (data == null || data.Length == 0)
+            {
+                Logger.Error("Cannot send data over the network. No data to send.");
+                return SocketStatus.Error;
+            }
+
+            UNetDebug.Assert(data.Length >= size);
+
+            int result = 0;
+            for (sent = 0; sent < size; sent += result)
+            {
+                result = m_socket.Send(data, sent, size - sent, SocketFlags.None, out SocketError error);
+
+                if (result == 0) //No data was sent, why?
+                {
+                    SocketStatus status = SocketStatusMapper.Map(error);
+                    if (status == SocketStatus.NotReady && sent > 0)
+                        return SocketStatus.Partial;
+
+                    return status;
+                }
+            }
+
+            return SocketStatus.Done;
         }
 
         //public SocketStatus Send(MyPacket)

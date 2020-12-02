@@ -66,8 +66,8 @@ namespace UnityNet.Tcp
         {
             m_socket = CreateListener();
 
-            m_sharedBuffer = null;
-            m_bufferOptions = BufferOptions.DEFAULT();
+            m_sharedBuffer = new byte[TcpSocket.BUFFER_SIZE];
+            m_bufferOptions = new BufferOptions(TcpSocket.BUFFER_SIZE, true);
         }
 
         /// <summary>
@@ -77,9 +77,9 @@ namespace UnityNet.Tcp
         public TcpListener(byte[] sharedBuffer)
         {
             if (sharedBuffer == null)
-                throw new ArgumentNullException("buffer");
+                throw new ArgumentNullException();
 
-            if (sharedBuffer.Length < BufferOptions.MIN_BUFFER_SIZE)
+            if (sharedBuffer.Length < TcpSocket.BUFFER_SIZE)
                 throw new ArgumentException("Buffer needs to have a minimum size of " + BufferOptions.MIN_BUFFER_SIZE);
 
             m_socket = CreateListener();
