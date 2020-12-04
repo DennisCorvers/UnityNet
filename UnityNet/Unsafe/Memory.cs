@@ -23,6 +23,12 @@ namespace UnityNet.Unsafe
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static IntPtr Malloc(int size)
         {
+            return Malloc(size, 8);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static IntPtr Malloc(int size, int alignment)
+        {
 #if UNITY
             return (IntPtr)UnsafeUtility.Malloc(size, 8, Unity.Collections.Allocator.Persistent);
 #else
@@ -33,10 +39,14 @@ namespace UnityNet.Unsafe
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static IntPtr MallocZeroed(int size)
         {
-            var memory = Malloc(size);
+            return MallocZeroed(size, 8);
+        }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static IntPtr MallocZeroed(int size, int alignment)
+        {
+            var memory = Malloc(size, alignment);
             ZeroMemory(memory, size);
-
             return memory;
         }
 
@@ -92,6 +102,5 @@ namespace UnityNet.Unsafe
             return Marshal.ReAllocHGlobal(buffer, (IntPtr)newSize);
 #endif
         }
-
     }
 }
