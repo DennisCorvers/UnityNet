@@ -1,6 +1,6 @@
 ﻿using System.Net;
 
-namespace UnityNet.Utils
+namespace UnityNet
 {
     public static class UNetIp
     {

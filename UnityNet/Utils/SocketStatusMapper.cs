@@ -2,9 +2,9 @@
 
 namespace UnityNet.Utils
 {
-    public static class SocketStatusMapper
+    internal static class SocketStatusMapper
     {
-        public static SocketStatus Map(SocketError error)
+        internal static SocketStatus Map(SocketError error)
         {
             //See https://referencesource.microsoft.com/#System/net/System/Net/Sockets/SocketErrors.cs,cb4675d5a1a2c847
 

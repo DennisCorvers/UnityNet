@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using UnityNet.Unsafe;
 using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
     public sealed class TcpSocket
     {
-        public const int BUFFER_SIZE = 1024;
+        public const int BUFFER_SIZE = 65535;
 
 #pragma warning disable IDE0032, IDE0044
         private bool m_isDisposed = false;
@@ -140,7 +141,7 @@ namespace UnityNet.Tcp
             if (buffer == null)
                 throw new ArgumentNullException("buffer");
 
-            UNetDebug.Assert(buffer.Length >= BUFFER_SIZE);
+            UNetDebug.Assert(buffer.Length >= 1024);
 
             m_buffer = buffer;
         }
@@ -323,14 +324,14 @@ namespace UnityNet.Tcp
 
             if (data == IntPtr.Zero || size == 0)
             {
-                Logger.Error("Cannot send data over the network. No data to send.");
+                Logger.Error(ExceptionMessages.NO_DATA);
                 return SocketStatus.Error;
             }
 
             int result = 0;
             for (sent = 0; sent < size; sent += result)
             {
-                int len = Unsafe.CopyToBuffer(m_buffer, (byte*)data, size - sent);
+                int len = Memory.CopyToBuffer(m_buffer, (byte*)data, size - sent);
                 var socketError = Send(m_buffer, len, out result);
             }
 

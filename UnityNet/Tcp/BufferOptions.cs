@@ -8,8 +8,6 @@ namespace UnityNet.Tcp
 {
     public struct BufferOptions
     {
-        public const ushort MIN_BUFFER_SIZE = 1024;
-
         /// <summary>
         /// The size of the read/write buffer.
         /// </summary>
@@ -29,15 +27,11 @@ namespace UnityNet.Tcp
         /// <param name="useSharedBuffer">TRUE to share the buffer between all Sockets from the same listener.</param>
         public BufferOptions(ushort bufferSize, bool useSharedBuffer)
         {
-            UNetDebug.Assert(MIN_BUFFER_SIZE >= 1024, "Buffer has a minimum size of " + MIN_BUFFER_SIZE);
+            if (bufferSize < 1024)
+                throw new ArgumentOutOfRangeException("Buffer needs to have a minimum size of 1024.");
 
             BufferSize = bufferSize;
             UseSharedBuffer = useSharedBuffer;
-        }
-
-        public static BufferOptions DEFAULT()
-        {
-            return new BufferOptions(8192, true);
         }
     }
 }

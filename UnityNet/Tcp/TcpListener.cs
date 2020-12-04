@@ -79,8 +79,8 @@ namespace UnityNet.Tcp
             if (sharedBuffer == null)
                 throw new ArgumentNullException();
 
-            if (sharedBuffer.Length < TcpSocket.BUFFER_SIZE)
-                throw new ArgumentException("Buffer needs to have a minimum size of " + BufferOptions.MIN_BUFFER_SIZE);
+            if (sharedBuffer.Length < 1024)
+                throw new ArgumentException("Buffer needs to have a minimum size of 1024.");
 
             m_socket = CreateListener();
 
@@ -187,12 +187,12 @@ namespace UnityNet.Tcp
         {
             if (m_isActive)
             {
-                Logger.Error("TcpListener is already bound. Call Close() first.");
+                Logger.Error(ExceptionMessages.LISTENER_BOUND);
                 return SocketStatus.Error;
             }
 
             if (endpoint == null)
-                throw new ArgumentNullException("endpoint");
+                throw new ArgumentNullException();
 
             m_socket.Bind(endpoint);
             try
@@ -221,7 +221,7 @@ namespace UnityNet.Tcp
         {
             if (!m_socket.IsBound)
             {
-                Logger.Error("Failed to accept a new connection, the socket is not listening.");
+                Logger.Error(ExceptionMessages.NOT_LISTENING);
                 socket = null;
                 return SocketStatus.Error;
             }
