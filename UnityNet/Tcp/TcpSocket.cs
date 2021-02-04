@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using UnityNet.Unsafe;
 using UnityNet.Utils;
 
 namespace UnityNet.Tcp
@@ -132,7 +129,7 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Creates a new TcpSocket with a user-defined buffer.
+        /// Creates a new <see cref="TcpSocket"/> with a user-defined buffer.
         /// </summary>
         /// <param name="buffer">The Send/Receive buffer.</param>
         public TcpSocket(byte[] buffer)
@@ -339,7 +336,7 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Sends data over the socket.
+        /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
         public SocketStatus Send(byte[] data)
@@ -348,7 +345,7 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Sends data over the socket.
+        /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="sent">The amount of bytes that have been sent.</param>
@@ -358,7 +355,7 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Sends data over the socket.
+        /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="size">The amount of data to send.</param>
