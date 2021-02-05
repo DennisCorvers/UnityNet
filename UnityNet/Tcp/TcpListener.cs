@@ -60,18 +60,18 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Creates a TcpListener.
+        /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         public TcpListener()
         {
             m_socket = CreateListener();
 
-            m_sharedBuffer = new byte[TcpSocket.BUFFER_SIZE];
-            m_bufferOptions = new BufferOptions(TcpSocket.BUFFER_SIZE, true);
+            m_sharedBuffer = new byte[TcpSocket.MinimumBufferSize];
+            m_bufferOptions = new BufferOptions(TcpSocket.MinimumBufferSize, true);
         }
 
         /// <summary>
-        /// Creates a TcpListener with a user-defined buffer.
+        /// Creates a <see cref="TcpListener"/> with a user-defined buffer.
         /// </summary>
         /// <param name="sharedBuffer">The Read/Write buffer that the connected sockets will use.</param>
         public TcpListener(byte[] sharedBuffer)
@@ -79,7 +79,7 @@ namespace UnityNet.Tcp
             if (sharedBuffer == null)
                 throw new ArgumentNullException();
 
-            if (sharedBuffer.Length < 1024)
+            if (sharedBuffer.Length < TcpSocket.MinimumBufferSize)
                 throw new ArgumentException("Buffer needs to have a minimum size of 1024.");
 
             m_socket = CreateListener();
@@ -89,7 +89,7 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Creates a TcpListener.
+        /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         /// <param name="bufferOptions">The options for the buffer that the connected sockets will use.</param>
         public TcpListener(BufferOptions bufferOptions)
@@ -110,7 +110,7 @@ namespace UnityNet.Tcp
 
         private Socket CreateListener()
         {
-            var sock = new Socket(AddressFamily.InterNetworkV6, System.Net.Sockets.SocketType.Stream, ProtocolType.Tcp)
+            var sock = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
             {
                 DualMode = true,
                 Blocking = false,
@@ -163,7 +163,7 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="port">Port to listen on for incoming connection attempts</param>
         /// <param name="address">Address of the interface to listen on</param>
-        public SocketStatus Listen(ushort port, IPAddress address)
+        public SocketStatus Listen(IPAddress address, ushort port)
         {
             if ((address == IPAddress.None) || (address == IPAddress.Broadcast))
                 return SocketStatus.Error;
@@ -247,8 +247,9 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Closes the network connection.
         /// </summary>
-        public void Close(bool reuseListener)
+        public void Close(bool reuseListener = false)
         {
+            // TODO Rewrite this
             if (m_socket.IsBound)
             {
                 m_socket.Close();

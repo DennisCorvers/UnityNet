@@ -1,16 +1,18 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public sealed class TcpSocket
+    public sealed class TcpSocket : IDisposable
     {
-        public const int BUFFER_SIZE = 65535;
+        public const int MinimumBufferSize = 1024;
 
 #pragma warning disable IDE0032, IDE0044
-        private bool m_isDisposed = false;
+        private bool m_isActive = false;
+        private bool m_isClearedUp = false;
         private Socket m_socket;
         private byte[] m_buffer;
 #pragma warning restore IDE0032, IDE0044
@@ -106,6 +108,13 @@ namespace UnityNet.Tcp
             get
             { return m_socket.Connected; }
         }
+        /// <summary>
+        /// Indication that a connection has been made.
+        /// </summary>
+        public bool IsActive
+        {
+            get => m_isActive;
+        }
 
         private bool ExclusiveAddressUse
         {
@@ -119,13 +128,14 @@ namespace UnityNet.Tcp
             }
         }
 
+
         /// <summary>
-        /// Creates a new TcpSocket with an internal buffer.
+        /// Creates a new <see cref="TcpSocket"/> with an internal buffer.
         /// </summary>
         public TcpSocket()
         {
             m_socket = CreateSocket();
-            m_buffer = new byte[BUFFER_SIZE];
+            m_buffer = new byte[MinimumBufferSize];
         }
 
         /// <summary>
@@ -138,7 +148,8 @@ namespace UnityNet.Tcp
             if (buffer == null)
                 throw new ArgumentNullException("buffer");
 
-            UNetDebug.Assert(buffer.Length >= 1024);
+            if (buffer.Length < MinimumBufferSize)
+                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {MinimumBufferSize}.");
 
             m_buffer = buffer;
         }
@@ -149,6 +160,7 @@ namespace UnityNet.Tcp
 
         internal TcpSocket(Socket socket, byte[] buffer)
         {
+            m_isActive = true;
             m_socket = ConfigureSocket(socket);
             m_buffer = buffer;
         }
@@ -157,6 +169,7 @@ namespace UnityNet.Tcp
         {
             Dispose();
         }
+
 
         /// <summary>
         /// Configures a socket.
@@ -175,8 +188,10 @@ namespace UnityNet.Tcp
         /// </summary>
         private Socket CreateSocket()
         {
+            m_isActive = false;
             return ConfigureSocket(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp));
         }
+
 
         /// <summary>
         /// Establishes a connection to the remote host.
@@ -228,7 +243,7 @@ namespace UnityNet.Tcp
         public SocketStatus Connect(string hostname, ushort port, int timeout)
         {
             if (hostname == null)
-                throw new ArgumentNullException("hostname");
+                throw new ArgumentNullException(nameof(hostname));
 
             IPAddress[] addresses = null;
             try
@@ -260,10 +275,11 @@ namespace UnityNet.Tcp
             if (endpoint == null)
                 throw new ArgumentNullException("endpoint");
 
-            UNetDebug.Assert(!m_socket.Connected, "Socket is already connected.");
+            if (m_isClearedUp)
+                throw new ObjectDisposedException(this.GetType().FullName);
 
-            if (m_isDisposed)
-                throw new InvalidOperationException("TcpSocket was disposed.");
+            if (m_isActive)
+                throw new InvalidOperationException("Socket is already connected.");
 
             if (timeout <= 0)
             {
@@ -280,7 +296,10 @@ namespace UnityNet.Tcp
                     var success = connectResult.AsyncWaitHandle.WaitOne(timeout * 1000);
 
                     if (m_socket.Connected)
+                    {
+                        m_isActive = true;
                         return SocketStatus.Done;
+                    }
                     return SocketStatus.Disconnected;
                 }
                 catch (Exception ex)
@@ -309,15 +328,16 @@ namespace UnityNet.Tcp
             return SocketStatus.Disconnected;
         }
 
+
         /// <summary>
-        /// Sends data over the socket.
+        /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="size">The size of the payload.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public unsafe SocketStatus Send(IntPtr data, int size, out int sent)
+        public unsafe SocketStatus Send(IntPtr data, int size, out int bytesSent)
         {
-            sent = 0;
+            bytesSent = 0;
 
             if (data == IntPtr.Zero || size == 0)
             {
@@ -326,10 +346,14 @@ namespace UnityNet.Tcp
             }
 
             int result = 0;
-            for (sent = 0; sent < size; sent += result)
+            for (bytesSent = 0; bytesSent < size; bytesSent += result)
             {
-                int len = Memory.CopyToBuffer(m_buffer, (byte*)data, size - sent);
-                var socketError = Send(m_buffer, len, out result);
+                int len = Memory.CopyToBuffer((byte*)data, m_buffer, size - bytesSent);
+                var stat = InnerSend(m_buffer, len, 0, out result);
+
+                // If the returned status is anything but Done, abort sending because something went wrong.
+                if (stat != SocketStatus.Done)
+                    return stat;
             }
 
             return SocketStatus.Done;
@@ -341,46 +365,67 @@ namespace UnityNet.Tcp
         /// <param name="data">The payload to send.</param>
         public SocketStatus Send(byte[] data)
         {
-            return Send(data, out int bytesSent);
+            return Send(data, data.Length, 0, out _);
         }
 
         /// <summary>
         /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
-        /// <param name="sent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(byte[] data, out int sent)
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, out int bytesSent)
         {
-            return Send(data, data.Length, out sent);
+            return Send(data, data.Length, 0, out bytesSent);
         }
 
         /// <summary>
         /// Sends data over the <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
-        /// <param name="size">The amount of data to send.</param>
-        /// <param name="sent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(byte[] data, int size, out int sent)
+        /// <param name="length">The amount of data to send.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, int length, out int bytesSent)
         {
-            sent = 0;
+            return Send(data, length, 0, out bytesSent);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="length">The amount of data to sent.</param>
+        /// <param name="offset">The offset at which to start sending.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        /// <returns></returns>
+        public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent)
+        {
+            bytesSent = 0;
 
             if (data == null || data.Length == 0)
             {
-                Logger.Error("Cannot send data over the network. No data to send.");
+                Logger.Error(ExceptionMessages.NO_DATA);
                 return SocketStatus.Error;
             }
 
-            UNetDebug.Assert(data.Length >= size);
+            if ((uint)length + (uint)offset > data.Length)
+                throw new ArgumentOutOfRangeException(nameof(length), length, $"{nameof(length)} needs smaller or equal to the length of {nameof(data)}.");
 
+            return InnerSend(data, length, offset, out bytesSent);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerSend(byte[] data, int length, int offset, out int bytesSent)
+        {
             int result = 0;
-            for (sent = 0; sent < size; sent += result)
+            for (bytesSent = 0; bytesSent < length; bytesSent += result)
             {
-                result = m_socket.Send(data, sent, size - sent, SocketFlags.None, out SocketError error);
+                result = m_socket.Send(data, bytesSent + offset, length - bytesSent, SocketFlags.None, out SocketError error);
 
-                if (result == 0) //No data was sent, why?
+                // No data was sent, why?
+                if (result == 0)
                 {
                     SocketStatus status = SocketStatusMapper.Map(error);
-                    if (status == SocketStatus.NotReady && sent > 0)
+                    if (status == SocketStatus.NotReady && bytesSent > 0)
                         return SocketStatus.Partial;
 
                     return status;
@@ -390,14 +435,20 @@ namespace UnityNet.Tcp
             return SocketStatus.Done;
         }
 
-        //public SocketStatus Send(MyPacket)
+        //public SocketStatus Send(ref MyPacket)
         //{
         //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
         //}
 
-        public SocketStatus Receive(IntPtr data, int size, ref int received)
+        /// <summary>
+        /// Receives raw data from the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="size">The size of the buffer.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(IntPtr data, int size, out int receivedBytes)
         {
-            received = 0;
+            receivedBytes = 0;
 
             if (data == IntPtr.Zero)
                 throw new ArgumentNullException("data");
@@ -407,39 +458,109 @@ namespace UnityNet.Tcp
             return SocketStatus.Error;
         }
 
-        public SocketStatus Receive(byte[] data, ref int received)
+        /// <summary>
+        /// Receives raw data from the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(byte[] data, out int receivedBytes)
         {
-            //TODO Use STACKALLOC BUFFER INSTEAD?? NO GC!
-            throw new NotImplementedException();
+            return Receive(data, data.Length, 0, out receivedBytes);
         }
 
-        //public SocketStatus Receive(MyPacket)
+        /// <summary>
+        /// Receives raw data from the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="size">The amount of bytes to copy.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
+        {
+            receivedBytes = 0;
+
+            if (data == null || data.Length == 0)
+            {
+                Logger.Error(ExceptionMessages.INVALID_BUFFER);
+                return SocketStatus.Error;
+            }
+
+            if ((uint)size + (uint)offset > data.Length)
+                throw new ArgumentOutOfRangeException($"{nameof(size)} + {nameof(offset)} needs to be smaller than, or equal to {nameof(data.Length)}.");
+
+            int sizeReceived = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
+
+            // TODO: Temp
+            if (error != SocketError.Success)
+                throw new SocketException((int)error);
+
+            if (sizeReceived > 0)
+            {
+                receivedBytes = sizeReceived;
+                return SocketStatus.Done;
+            }
+
+            // Size 0 should mean the remote connection has been closed.
+            if (sizeReceived == 0)
+                return SocketStatus.Disconnected;
+
+
+            return SocketStatusMapper.Map(error);
+        }
+
+        //public SocketStatus Receive(ref MyPacket)
         //{
         //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L345
         //}
 
         /// <summary>
-        /// Closes the network connection
+        /// Disposes the TCP Connection.
         /// </summary>
         /// <param name="reuseSocket">TRUE to create a new underlying socket.</param>
-        public void Close(bool reuseSocket)
+        public void Close(bool reuseSocket = false)
         {
-            if (Connected)
+            if (m_isActive)
             {
-                m_socket.Close();
+                // Shuts down and closes the connection.
+                Dispose();
+
                 if (reuseSocket)
+                {
                     m_socket = CreateSocket();
+                }
             }
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (m_isClearedUp)
+                return;
+
+            if (disposing)
+            {
+                if (m_socket != null)
+                {
+                    try
+                    {
+                        // Shutdown the connection if there's one in progress.
+                        if (m_socket.Connected)
+                            m_socket.Shutdown(SocketShutdown.Both);
+                    }
+                    finally
+                    {
+                        m_socket.Close();
+                        m_socket = null;
+                    }
+                }
+
+                GC.SuppressFinalize(this);
+            }
+
+            m_isClearedUp = true;
         }
 
         public void Dispose()
         {
-            GC.SuppressFinalize(this);
-            if (!m_isDisposed)
-            {
-                m_socket.Close();
-                m_isDisposed = true;
-            }
+            Dispose(true);
         }
     }
 }

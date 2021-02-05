@@ -65,7 +65,7 @@ namespace UnityNetTest.TcpTests
             TcpSocket sock = new TcpSocket();
             sock.Dispose();
 
-            Assert.Catch<InvalidOperationException>(() => { sock.Connect("localhost", 1002); });
+            Assert.Catch<ObjectDisposedException>(() => { sock.Connect("localhost", 1002); });
         }
     }
 }

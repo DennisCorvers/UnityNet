@@ -90,19 +90,16 @@ namespace UnityNet.Utils
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int CopyToBuffer(byte[] destination, byte* source, int length)
+        public static int CopyToBuffer(byte* source, byte[] destination, int length)
         {
-            fixed (byte* pinnedBuffer = destination)
-            {
-                length = Math.Min(destination.Length, length);
-                MemCpy(source, pinnedBuffer, length);
-            }
+            length = Math.Min(destination.Length, length);
+            Marshal.Copy((IntPtr)source, destination, length, length);
 
             return length;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MemCpy(void* destination, void* source, int size)
+        public static void MemCpy(void* source, void* destination, int size)
         {
 #if UNITY
             UnsafeUtility.MemCpy(destination, source, size);
