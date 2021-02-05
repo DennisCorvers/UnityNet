@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using UnityNet.Utils;
 
 namespace UnityNet.Tcp
@@ -167,7 +168,7 @@ namespace UnityNet.Tcp
 
         ~TcpSocket()
         {
-            Dispose();
+            Dispose(false);
         }
 
 
@@ -196,29 +197,21 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Establishes a connection to the remote host.
         /// </summary>
-        /// <param name="address">The Ip Address of the remote host</param>
-        /// <param name="port">The port of the remote host</param>
-        public SocketStatus Connect(IPAddress address, ushort port)
+        /// <param name="address">The Ip Address of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        public SocketStatus Connect(UNetIp address, ushort port, int timeout = 0)
         {
-            return Connect(new IPEndPoint(address, port), 0);
+            return Connect(new IPEndPoint(address.ToIPAddress(), port), 0);
         }
 
         /// <summary>
         /// Establishes a connection to the remote host.
         /// </summary>
-        /// <param name="endpoint">The endpoint of the remote host</param>
-        public SocketStatus Connect(IPEndPoint endpoint)
-        {
-            return Connect(endpoint, 0);
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="address">The Ip Address of the remote host</param>
-        /// <param name="port">The port of the remote host</param>
-        /// <param name="timeout">The timeout in seconds to wait for a connection</param>
-        public SocketStatus Connect(IPAddress address, ushort port, int timeout)
+        /// <param name="address">The Ip Address of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        public SocketStatus Connect(IPAddress address, ushort port, int timeout = 0)
         {
             return Connect(new IPEndPoint(address, port), timeout);
         }
@@ -226,24 +219,18 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Establishes a connection to the remote host.
         /// </summary>
-        /// <param name="hostname">The hostname of the remote host</param>
-        /// <param name="port">The port of the remote host</param>
-        /// <returns></returns>
-        public SocketStatus Connect(string hostname, ushort port)
-        {
-            return Connect(hostname, port, 0);
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="hostname">The hostname of the remote host</param>
-        /// <param name="port">The port of the remote host</param>
-        /// <returns></returns>
-        public SocketStatus Connect(string hostname, ushort port, int timeout)
+        /// <param name="hostname">The hostname of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        public SocketStatus Connect(string hostname, ushort port, int timeout = 0)
         {
             if (hostname == null)
                 throw new ArgumentNullException(nameof(hostname));
+
+            if (m_isClearedUp)
+                throw new ObjectDisposedException(this.GetType().FullName);
+
+            if (m_isActive)
+                throw new InvalidOperationException("Socket is already connected.");
 
             IPAddress[] addresses = null;
             try
@@ -268,9 +255,9 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Establishes a connection to the remote host.
         /// </summary>
-        /// <param name="endpoint">The endpoint of the remote host</param>
-        /// <param name="timeout">The timeout in seconds to wait for a connection</param>
-        public SocketStatus Connect(IPEndPoint endpoint, int timeout)
+        /// <param name="endpoint">The endpoint of the remote host.</param>
+        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        public SocketStatus Connect(IPEndPoint endpoint, int timeout = 0)
         {
             if (endpoint == null)
                 throw new ArgumentNullException("endpoint");
@@ -287,9 +274,6 @@ namespace UnityNet.Tcp
             }
             else
             {
-                //Same previous socket information
-                bool blockState = Blocking;
-
                 try
                 {
                     var connectResult = m_socket.BeginConnect(endpoint, null, null);
@@ -300,6 +284,7 @@ namespace UnityNet.Tcp
                         m_isActive = true;
                         return SocketStatus.Done;
                     }
+
                     return SocketStatus.Disconnected;
                 }
                 catch (Exception ex)
@@ -315,9 +300,13 @@ namespace UnityNet.Tcp
             try
             {
                 m_socket.Connect(endpoint);
+                m_isActive = true;
             }
             catch (SocketException ex)
             {
+                if (ex.ErrorCode == (int)SocketError.WouldBlock)
+                    return SocketStatus.NotReady;
+
                 Logger.Error(ex);
                 return SocketStatus.Error;
             }
@@ -326,6 +315,112 @@ namespace UnityNet.Tcp
                 return SocketStatus.Done;
 
             return SocketStatus.Disconnected;
+        }
+
+        /// <summary>
+        /// Starts connecting to the remote host.
+        /// </summary>
+        /// <param name="address">The Ip Address of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        public Task<SocketStatus> ConnectAsync(UNetIp address, ushort port)
+        {
+            return ConnectAsync(new IPEndPoint(address.ToIPAddress(), port));
+        }
+
+        /// <summary>
+        /// Starts connecting to the remote host.
+        /// </summary>
+        /// <param name="address">The Ip Address of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        public Task<SocketStatus> ConnectAsync(IPAddress address, ushort port)
+        {
+            return ConnectAsync(new IPEndPoint(address, port));
+        }
+
+        /// <summary>
+        /// Starts connecting to the remote host.
+        /// </summary>
+        /// <param name="hostname">The hostname of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        public Task<SocketStatus> ConnectAsync(string hostname, ushort port)
+        {
+            if (hostname == null)
+                throw new ArgumentNullException(nameof(hostname));
+
+            if (m_isClearedUp)
+                throw new ObjectDisposedException(GetType().FullName);
+
+            var tcs = new TaskCompletionSource<SocketStatus>();
+
+            m_socket.BeginConnect(hostname, port, (asyncResult) =>
+            {
+                var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
+
+                try
+                {
+                    m_socket.EndConnect(asyncResult);
+                    m_isActive = true;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                    innerTcs.TrySetResult(SocketStatus.Error);
+                }
+
+                if (m_socket.Connected)
+                {
+                    innerTcs.TrySetResult(SocketStatus.Done);
+                    return;
+                }
+
+                innerTcs.TrySetResult(SocketStatus.Disconnected);
+
+            }, tcs);
+
+            return tcs.Task;
+        }
+
+        /// <summary>
+        /// Starts connecting to the remote host.
+        /// </summary>
+        /// <param name="endpoint">The endpoint of the remote host.</param>
+        /// <param name="callback">The callback that receives the connection result.</param>
+        public Task<SocketStatus> ConnectAsync(IPEndPoint endpoint)
+        {
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
+
+            if (m_isClearedUp)
+                throw new ObjectDisposedException(GetType().FullName);
+
+            var tcs = new TaskCompletionSource<SocketStatus>();
+
+            m_socket.BeginConnect(endpoint, (asyncResult) =>
+            {
+                var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
+
+                try
+                {
+                    m_socket.EndConnect(asyncResult);
+                    m_isActive = true;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                    innerTcs.TrySetResult(SocketStatus.Error);
+                }
+
+                if (m_socket.Connected)
+                {
+                    innerTcs.TrySetResult(SocketStatus.Done);
+                    return;
+                }
+
+                innerTcs.TrySetResult(SocketStatus.Disconnected);
+
+            }, tcs);
+
+            return tcs.Task;
         }
 
 
@@ -450,12 +545,28 @@ namespace UnityNet.Tcp
         {
             receivedBytes = 0;
 
-            if (data == IntPtr.Zero)
-                throw new ArgumentNullException("data");
+            if (data == null)
+            {
+                Logger.Error(ExceptionMessages.INVALID_BUFFER);
+                return SocketStatus.Error;
+            }
 
-            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L268
-            //Poll socket to check disconnect?
-            return SocketStatus.Error;
+            int processedBytes = 0;
+            while (processedBytes < size)
+            {
+                // Allow a maximum receive of 1024 bytes at a time.
+                int toReceive = Math.Min(4, size - processedBytes);
+
+                var status = InnerReceive(m_buffer, toReceive, 0, out int result);
+                receivedBytes += result;
+                processedBytes += toReceive;
+
+                // If the returned status is anything but Done, abort sending because something went wrong.
+                if (status != SocketStatus.Done)
+                    return status;
+            }
+
+            return SocketStatus.Done;
         }
 
         /// <summary>
@@ -487,11 +598,15 @@ namespace UnityNet.Tcp
             if ((uint)size + (uint)offset > data.Length)
                 throw new ArgumentOutOfRangeException($"{nameof(size)} + {nameof(offset)} needs to be smaller than, or equal to {nameof(data.Length)}.");
 
-            int sizeReceived = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
+            return InnerReceive(data, size, offset, out receivedBytes);
+        }
 
-            // TODO: Temp
-            if (error != SocketError.Success)
-                throw new SocketException((int)error);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
+        {
+            receivedBytes = 0;
+
+            int sizeReceived = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
 
             if (sizeReceived > 0)
             {
@@ -499,10 +614,12 @@ namespace UnityNet.Tcp
                 return SocketStatus.Done;
             }
 
-            // Size 0 should mean the remote connection has been closed.
-            if (sizeReceived == 0)
+            // If the socket returns 0 immediately with a SocketError.Success
+            // The connection has been shutdown by the remote endpoint.
+            if (error == SocketError.Success)
+            {
                 return SocketStatus.Disconnected;
-
+            }
 
             return SocketStatusMapper.Map(error);
         }

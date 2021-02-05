@@ -21,6 +21,10 @@
         /// <summary>
         /// An unexpected error happened
         /// </summary>
-        Error
+        Error,
+        /// <summary>
+        /// The blocking call timed-out
+        /// </summary>
+        TimedOut
     }
 }
