@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text;
 
 #if UNITY
 using Unity.Collections.LowLevel.Unsafe;
@@ -89,13 +87,31 @@ namespace UnityNet.Utils
             return (T*)ptr;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int CopyToBuffer(byte* source, byte[] destination, int length)
-        {
-            length = Math.Min(destination.Length, length);
-            Marshal.Copy((IntPtr)source, destination, length, length);
 
-            return length;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void MemCpy(byte[] source, int offset, byte* destination, int size)
+        {
+#if UNITY
+            fixed (byte* ptr = source)
+            {
+                UnsafeUtility.MemCpy(destination, ptr + offset, size);
+            }
+#else
+            Marshal.Copy(source, offset, (IntPtr)destination, size);
+#endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void MemCpy(byte* source, byte[] destination, int offset, int size)
+        {
+#if UNITY
+            fixed (byte* ptr = destination)
+            {
+                UnsafeUtility.MemCpy(ptr + offset, source, size);
+            }
+#else
+            Marshal.Copy((IntPtr)source, destination, offset, size);
+#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -107,6 +123,7 @@ namespace UnityNet.Utils
             Buffer.MemoryCopy(source, destination, size, size);
 #endif
         }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void MemMove(void* destination, void* source, int size)

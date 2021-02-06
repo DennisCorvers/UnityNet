@@ -3,17 +3,19 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using UnityNet.Serialization;
 using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public sealed class TcpSocket : IDisposable
+    public unsafe sealed class TcpSocket : IDisposable
     {
         public const int MinimumBufferSize = 1024;
 
 #pragma warning disable IDE0032, IDE0044
         private bool m_isActive = false;
         private bool m_isClearedUp = false;
+        private PendingPacket m_pendingPacket;
         private Socket m_socket;
         private byte[] m_buffer;
 #pragma warning restore IDE0032, IDE0044
@@ -432,10 +434,9 @@ namespace UnityNet.Tcp
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
         public unsafe SocketStatus Send(IntPtr data, int size, out int bytesSent)
         {
-            bytesSent = 0;
-
             if (data == IntPtr.Zero || size == 0)
             {
+                bytesSent = 0;
                 Logger.Error(ExceptionMessages.NO_DATA);
                 return SocketStatus.Error;
             }
@@ -443,10 +444,12 @@ namespace UnityNet.Tcp
             int result = 0;
             for (bytesSent = 0; bytesSent < size; bytesSent += result)
             {
-                int len = Memory.CopyToBuffer((byte*)data, m_buffer, size - bytesSent);
+                int len = Math.Min(m_buffer.Length, size - bytesSent);
+                Memory.MemCpy(((byte*)data) + bytesSent, m_buffer, 0, len);
                 var stat = InnerSend(m_buffer, len, 0, out result);
 
-                // If the returned status is anything but Done, abort sending because something went wrong.
+                // If the returned status is anything but Done, 
+                // stop sending because something went wrong.
                 if (stat != SocketStatus.Done)
                     return stat;
             }
@@ -530,10 +533,12 @@ namespace UnityNet.Tcp
             return SocketStatus.Done;
         }
 
-        //public SocketStatus Send(ref MyPacket)
-        //{
-        //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
-        //}
+        public SocketStatus Send(ref NetPacket packet)
+        {
+            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
+
+            return SocketStatus.Done;
+        }
 
         /// <summary>
         /// Receives raw data from the <see cref="TcpSocket"/>.
@@ -551,17 +556,13 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            int processedBytes = 0;
-            while (processedBytes < size)
+            while (receivedBytes < size)
             {
-                // Allow a maximum receive of 1024 bytes at a time.
-                int toReceive = Math.Min(4, size - processedBytes);
+                // Allow a maximum receive of buffer.Length at a time.
+                var status = InnerReceive((byte*)data, size - receivedBytes, receivedBytes, out int result);
 
-                var status = InnerReceive(m_buffer, toReceive, 0, out int result);
                 receivedBytes += result;
-                processedBytes += toReceive;
 
-                // If the returned status is anything but Done, abort sending because something went wrong.
                 if (status != SocketStatus.Done)
                     return status;
             }
@@ -598,36 +599,75 @@ namespace UnityNet.Tcp
             if ((uint)size + (uint)offset > data.Length)
                 throw new ArgumentOutOfRangeException($"{nameof(size)} + {nameof(offset)} needs to be smaller than, or equal to {nameof(data.Length)}.");
 
-            return InnerReceive(data, size, offset, out receivedBytes);
-        }
+            receivedBytes = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
-        {
-            receivedBytes = 0;
-
-            int sizeReceived = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
-
-            if (sizeReceived > 0)
-            {
-                receivedBytes = sizeReceived;
+            if (receivedBytes > 0)
                 return SocketStatus.Done;
-            }
 
             // If the socket returns 0 immediately with a SocketError.Success
             // The connection has been shutdown by the remote endpoint.
             if (error == SocketError.Success)
-            {
                 return SocketStatus.Disconnected;
-            }
 
             return SocketStatusMapper.Map(error);
         }
 
-        //public SocketStatus Receive(ref MyPacket)
-        //{
-        //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L345
-        //}
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private unsafe SocketStatus InnerReceive(byte* data, int size, int offset, out int receivedBytes)
+        {
+            int maxBytes = Math.Min(size, m_buffer.Length);
+            receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
+
+            if (receivedBytes > 0)
+            {
+                Memory.MemCpy(m_buffer, 0, data + offset, receivedBytes);
+                return SocketStatus.Done;
+            }
+
+            if (error == SocketError.Success)
+                return SocketStatus.Disconnected;
+
+            return SocketStatusMapper.Map(error);
+        }
+
+        public SocketStatus ReceiveUnsafe(ref NetPacket packet)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Receives a packet from the <see cref="TcpSocket"/> and stores it in the provided <see cref="RawPacket"/>.
+        /// </summary>
+        /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
+        public SocketStatus ReceiveUnsafe(ref RawPacket packet)
+        {
+            // packet.clear
+
+            // Store this temporarily so we can read bytes into this value.
+            uint pendingPackSize = m_pendingPacket.Size;
+
+            uint packetSize = 0;
+            int received = 0;
+
+            // Try to get the size of the packet.
+            while (m_pendingPacket.SizeReceived < sizeof(uint))
+            {
+                byte* data = ((byte*)&pendingPackSize) + m_pendingPacket.SizeReceived;
+                var status = InnerReceive(data, sizeof(uint) - m_pendingPacket.SizeReceived, 0, out received);
+                m_pendingPacket.SizeReceived += received;
+
+                if (status != SocketStatus.Done)
+                    return status;
+            }
+
+            // Write back the packet size.
+            packetSize = m_pendingPacket.Size = pendingPackSize;
+
+            // Receive packet here...
+            // https://github.com/SFML/SFML/blob/498d7ee79c700bba767ca42f68ced8ca116b5ada/src/SFML/Network/TcpSocket.cpp#L377
+
+            return SocketStatus.Error;
+        }
 
         /// <summary>
         /// Disposes the TCP Connection.
@@ -668,9 +708,11 @@ namespace UnityNet.Tcp
                         m_socket = null;
                     }
                 }
-
-                GC.SuppressFinalize(this);
             }
+
+            if (m_pendingPacket.Data != null)
+                Memory.Free(m_pendingPacket.Data);
+            m_pendingPacket.Data = null;
 
             m_isClearedUp = true;
         }
@@ -678,6 +720,7 @@ namespace UnityNet.Tcp
         public void Dispose()
         {
             Dispose(true);
+            GC.SuppressFinalize(this);
         }
     }
 }
