@@ -11,7 +11,7 @@ namespace UnityNetTest.TcpTests
     public class TcpSocketTests
     {
         [Test]
-        public void Constructor1Test()
+        public void ConstructorTest()
         {
             TcpSocket sock = new TcpSocket();
 
@@ -24,7 +24,7 @@ namespace UnityNetTest.TcpTests
         public void ConstructorFaultTest()
         {
             Assert.Catch<ArgumentNullException>(() =>
-            { TcpSocket sock = new TcpSocket(null); });
+            { TcpSocket sock = new TcpSocket(buffer: null); });
 
             Assert.Catch(() =>
             { TcpSocket sock = new TcpSocket(new byte[1000]); });

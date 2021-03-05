@@ -10,20 +10,19 @@ namespace UnityNet.Tcp
         public const int SOMAXCONN = ushort.MaxValue;
 
 #pragma warning disable IDE0032, IDE0044
+        private byte[] m_sharedBuffer = null;
+        private Socket m_socket;
+
         private bool m_isDisposed = false;
         private bool m_isActive = false;
-        private byte[] m_sharedBuffer = null;
-        private BufferOptions m_bufferOptions;
-        private Socket m_socket;
+        private bool m_shareBuffer;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
         /// Indicates if the listener is listening on a port.
         /// </summary>
         public bool IsActive
-        {
-            get { return m_isActive; }
-        }
+            => m_isActive;
         /// <summary>
         /// Gets/Sets the blocking state of the underlying socket.
         /// </summary>
@@ -58,49 +57,30 @@ namespace UnityNet.Tcp
                 return ((IPEndPoint)m_socket.LocalEndPoint).Address;
             }
         }
+        /// <summary>
+        /// Indicates if the listener shares a buffer among the connected TcpSockets
+        /// </summary>
+        public bool IsSharingBuffer
+            => m_shareBuffer;
 
         /// <summary>
         /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         public TcpListener()
-        {
-            m_socket = CreateListener();
-
-            m_sharedBuffer = new byte[TcpSocket.MinimumBufferSize];
-            m_bufferOptions = new BufferOptions(TcpSocket.MinimumBufferSize, true);
-        }
-
-        /// <summary>
-        /// Creates a <see cref="TcpListener"/> with a user-defined buffer.
-        /// </summary>
-        /// <param name="sharedBuffer">The Read/Write buffer that the connected sockets will use.</param>
-        public TcpListener(byte[] sharedBuffer)
-        {
-            if (sharedBuffer == null)
-                throw new ArgumentNullException();
-
-            if (sharedBuffer.Length < TcpSocket.MinimumBufferSize)
-                throw new ArgumentException("Buffer needs to have a minimum size of 1024.");
-
-            m_socket = CreateListener();
-
-            m_sharedBuffer = sharedBuffer;
-            m_bufferOptions = new BufferOptions((ushort)sharedBuffer.Length, true);
-        }
+            : this(false)
+        { }
 
         /// <summary>
         /// Creates a <see cref="TcpListener"/>.
         /// </summary>
-        /// <param name="bufferOptions">The options for the buffer that the connected sockets will use.</param>
-        public TcpListener(BufferOptions bufferOptions)
+        /// <param name="shareBuffer">If TRUE, all accepted TCPSockets will share the same buffer.</param>
+        public TcpListener(bool shareBuffer)
         {
             m_socket = CreateListener();
+            m_shareBuffer = shareBuffer;
 
-            m_sharedBuffer = null;
-            m_bufferOptions = bufferOptions;
-
-            if (bufferOptions.UseSharedBuffer)
-                m_sharedBuffer = new byte[bufferOptions.BufferSize];
+            if (shareBuffer)
+                m_sharedBuffer = new byte[TcpSocket.BUFFER_SIZE];
         }
 
         ~TcpListener()
@@ -140,10 +120,6 @@ namespace UnityNet.Tcp
         ///
         /// This function makes the socket start listening on the
         /// specified port, waiting for incoming connection attempts.
-        ///
-        /// If the socket is already listening on a port when this
-        /// function is called, it will stop listening on the old
-        /// port before starting to listen on the new port.
         /// </summary>
         /// <param name="port">Port to listen on for incoming connection attempts</param>
         public SocketStatus Listen(ushort port)
@@ -156,10 +132,6 @@ namespace UnityNet.Tcp
         ///
         /// This function makes the socket start listening on the
         /// specified port, waiting for incoming connection attempts.
-        ///
-        /// If the socket is already listening on a port when this
-        /// function is called, it will stop listening on the old
-        /// port before starting to listen on the new port.
         /// </summary>
         /// <param name="port">Port to listen on for incoming connection attempts</param>
         /// <param name="address">Address of the interface to listen on</param>
@@ -177,10 +149,6 @@ namespace UnityNet.Tcp
         ///
         /// This function makes the socket start listening on the
         /// specified port, waiting for incoming connection attempts.
-        ///
-        /// If the socket is already listening on a port when this
-        /// function is called, it will stop listening on the old
-        /// port before starting to listen on the new port.
         /// </summary>
         /// <param name="iPEndPoint">Endpoint of the interface to listen on</param>
         public SocketStatus Listen(IPEndPoint endpoint)
@@ -238,10 +206,10 @@ namespace UnityNet.Tcp
 
         private TcpSocket CreateTcpSocket(Socket socket)
         {
-            if (m_bufferOptions.UseSharedBuffer)
+            if (m_shareBuffer)
                 return new TcpSocket(socket, m_sharedBuffer);
             else
-                return new TcpSocket(socket, m_bufferOptions.BufferSize);
+                return new TcpSocket(socket);
         }
 
         /// <summary>

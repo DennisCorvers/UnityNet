@@ -10,7 +10,7 @@ namespace UnityNet.Tcp
 {
     public unsafe sealed class TcpSocket : IDisposable
     {
-        public const int MinimumBufferSize = 1024;
+        internal const int BUFFER_SIZE = 1024;
 
 #pragma warning disable IDE0032, IDE0044
         private bool m_isActive = false;
@@ -138,7 +138,7 @@ namespace UnityNet.Tcp
         public TcpSocket()
         {
             m_socket = CreateSocket();
-            m_buffer = new byte[MinimumBufferSize];
+            m_buffer = new byte[BUFFER_SIZE];
         }
 
         /// <summary>
@@ -151,14 +151,14 @@ namespace UnityNet.Tcp
             if (buffer == null)
                 throw new ArgumentNullException("buffer");
 
-            if (buffer.Length < MinimumBufferSize)
-                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {MinimumBufferSize}.");
+            if (buffer.Length < BUFFER_SIZE)
+                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {BUFFER_SIZE}.");
 
             m_buffer = buffer;
         }
 
-        internal TcpSocket(Socket socket, ushort bufferSize)
-            : this(socket, new byte[bufferSize])
+        internal TcpSocket(Socket socket)
+            : this(socket, new byte[BUFFER_SIZE])
         { }
 
         internal TcpSocket(Socket socket, byte[] buffer)
@@ -410,6 +410,7 @@ namespace UnityNet.Tcp
                 {
                     Logger.Error(e);
                     innerTcs.TrySetResult(SocketStatus.Error);
+                    return;
                 }
 
                 if (m_socket.Connected)
