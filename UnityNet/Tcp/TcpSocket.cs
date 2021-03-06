@@ -13,11 +13,14 @@ namespace UnityNet.Tcp
         internal const int BUFFER_SIZE = 1024;
 
 #pragma warning disable IDE0032, IDE0044
-        private bool m_isActive = false;
-        private bool m_isClearedUp = false;
-        private PendingPacket m_pendingPacket;
         private Socket m_socket;
         private byte[] m_buffer;
+
+        private PendingPacket m_pendingPacket;
+
+        private bool m_isActive = false;
+        private bool m_isClearedUp = false;
+        private bool m_hasSharedBuffer = false;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
@@ -107,17 +110,17 @@ namespace UnityNet.Tcp
         /// Indicates whether the underlying socket is connected.
         /// </summary>
         public bool Connected
-        {
-            get
-            { return m_socket.Connected; }
-        }
+            => m_socket.Connected;
         /// <summary>
         /// Indication that a connection has been made.
         /// </summary>
         public bool IsActive
-        {
-            get => m_isActive;
-        }
+=> m_isActive;
+        /// <summary>
+        /// Indicates if the TcpSocket is using a buffer that is shared between other TcpSocket instances.
+        /// </summary>
+        public bool HasSharedBuffer
+            => m_hasSharedBuffer;
 
         private bool ExclusiveAddressUse
         {
@@ -157,13 +160,26 @@ namespace UnityNet.Tcp
             m_buffer = buffer;
         }
 
+        /// <summary>
+        /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
+        /// Creates its own internal buffer.
+        /// </summary>
         internal TcpSocket(Socket socket)
             : this(socket, new byte[BUFFER_SIZE])
-        { }
+        {
+            m_isActive = true;
+            m_socket = ConfigureSocket(socket);
+            m_buffer = new byte[BUFFER_SIZE];
+        }
 
+        /// <summary>
+        /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
+        /// Uses a shared buffer.
+        /// </summary>
         internal TcpSocket(Socket socket, byte[] buffer)
         {
             m_isActive = true;
+            m_hasSharedBuffer = true;
             m_socket = ConfigureSocket(socket);
             m_buffer = buffer;
         }
@@ -265,7 +281,7 @@ namespace UnityNet.Tcp
                 throw new ArgumentNullException("endpoint");
 
             if (m_isClearedUp)
-                throw new ObjectDisposedException(this.GetType().FullName);
+                throw new ObjectDisposedException(GetType().FullName);
 
             if (m_isActive)
                 throw new InvalidOperationException("Socket is already connected.");
@@ -438,7 +454,7 @@ namespace UnityNet.Tcp
             if (data == IntPtr.Zero || size == 0)
             {
                 bytesSent = 0;
-                Logger.Error(ExceptionMessages.NO_DATA);
+                Logger.Error(ExceptionHelper.NO_DATA);
                 return SocketStatus.Error;
             }
 
@@ -502,7 +518,7 @@ namespace UnityNet.Tcp
 
             if (data == null || data.Length == 0)
             {
-                Logger.Error(ExceptionMessages.NO_DATA);
+                Logger.Error(ExceptionHelper.NO_DATA);
                 return SocketStatus.Error;
             }
 
@@ -553,7 +569,7 @@ namespace UnityNet.Tcp
 
             if (data == null)
             {
-                Logger.Error(ExceptionMessages.INVALID_BUFFER);
+                Logger.Error(ExceptionHelper.INVALID_BUFFER);
                 return SocketStatus.Error;
             }
 
@@ -593,7 +609,7 @@ namespace UnityNet.Tcp
 
             if (data == null || data.Length == 0)
             {
-                Logger.Error(ExceptionMessages.INVALID_BUFFER);
+                Logger.Error(ExceptionHelper.INVALID_BUFFER);
                 return SocketStatus.Error;
             }
 

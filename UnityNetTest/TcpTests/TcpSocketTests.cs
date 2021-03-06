@@ -36,7 +36,7 @@ namespace UnityNetTest.TcpTests
             TcpSocket sock = new TcpSocket();
             var result = sock.Connect("localhost", 1002);
 
-            Assert.AreEqual(result, SocketStatus.Error);
+            Assert.AreEqual(result, SocketStatus.NotReady);
         }
 
         [Test]

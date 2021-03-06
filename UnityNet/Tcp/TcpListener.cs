@@ -138,7 +138,7 @@ namespace UnityNet.Tcp
         public SocketStatus Listen(IPAddress address, ushort port)
         {
             if ((address == IPAddress.None) || (address == IPAddress.Broadcast))
-                return SocketStatus.Error;
+                throw new InvalidOperationException("IPAddress can't be IPAddress.None or IPAddress.Broadcast.");
 
             return Listen(new IPEndPoint(address, port));
 
@@ -155,7 +155,7 @@ namespace UnityNet.Tcp
         {
             if (m_isActive)
             {
-                Logger.Error(ExceptionMessages.LISTENER_BOUND);
+                ExceptionHelper.ThrowAlreadyBound();
                 return SocketStatus.Error;
             }
 
@@ -189,7 +189,7 @@ namespace UnityNet.Tcp
         {
             if (!m_socket.IsBound)
             {
-                Logger.Error(ExceptionMessages.NOT_LISTENING);
+                ExceptionHelper.ThrowNotListening();
                 socket = null;
                 return SocketStatus.Error;
             }
@@ -197,19 +197,17 @@ namespace UnityNet.Tcp
             if (!m_socket.Poll(0, SelectMode.SelectRead))
             {
                 socket = null;
-                return SocketStatus.Disconnected;
+                return SocketStatus.Error;
             }
 
-            socket = CreateTcpSocket(m_socket.Accept());
-            return SocketStatus.Done;
-        }
+            var acceptedSocket = m_socket.Accept();
 
-        private TcpSocket CreateTcpSocket(Socket socket)
-        {
             if (m_shareBuffer)
-                return new TcpSocket(socket, m_sharedBuffer);
+                socket = new TcpSocket(acceptedSocket, m_sharedBuffer);
             else
-                return new TcpSocket(socket);
+                socket = new TcpSocket(acceptedSocket);
+
+            return SocketStatus.Done;
         }
 
         /// <summary>
