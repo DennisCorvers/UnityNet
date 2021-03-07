@@ -13,10 +13,12 @@ namespace UnityNet.Tcp
         internal const int BUFFER_SIZE = 1024;
 
 #pragma warning disable IDE0032, IDE0044
+        private PendingPacket m_pendingPacket;
+
         private Socket m_socket;
         private byte[] m_buffer;
 
-        private PendingPacket m_pendingPacket;
+        private int m_maxPacketSize = 2;// ushort.MaxValue * 2;
 
         private bool m_isActive = false;
         private bool m_isClearedUp = false;
@@ -104,6 +106,16 @@ namespace UnityNet.Tcp
         {
             get { return m_socket.SendTimeout; }
             set { m_socket.SendTimeout = value; }
+        }
+
+        /// <summary>
+        /// Incidates the maximum size of a packet that can be processed.
+        /// Packets larger than this will be dropped.
+        /// </summary>
+        public int MaxPacketSize
+        {
+            get => m_maxPacketSize;
+            set => m_maxPacketSize = value <= 0 ? throw new ArgumentOutOfRangeException() : value;
         }
 
         /// <summary>
@@ -451,24 +463,28 @@ namespace UnityNet.Tcp
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
         public unsafe SocketStatus Send(IntPtr data, int size, out int bytesSent)
         {
+            bytesSent = 0;
+
             if (data == IntPtr.Zero || size == 0)
             {
-                bytesSent = 0;
                 Logger.Error(ExceptionHelper.NO_DATA);
                 return SocketStatus.Error;
             }
 
             int result = 0;
-            for (bytesSent = 0; bytesSent < size; bytesSent += result)
+            for (; bytesSent < size; bytesSent += result)
             {
-                int len = Math.Min(m_buffer.Length, size - bytesSent);
-                Memory.MemCpy(((byte*)data) + bytesSent, m_buffer, 0, len);
-                var stat = InnerSend(m_buffer, len, 0, out result);
+                // Copy unmanaged data to managed buffer.
+                int toSend = Math.Min(m_buffer.Length, size - bytesSent);
+                Memory.MemCpy((byte*)data + bytesSent, m_buffer, 0, toSend);
+
+                // Send managed buffer.
+                var status = InnerSend(m_buffer, toSend, 0, out result);
 
                 // If the returned status is anything but Done, 
                 // stop sending because something went wrong.
-                if (stat != SocketStatus.Done)
-                    return stat;
+                if (status != SocketStatus.Done)
+                    return status;
             }
 
             return SocketStatus.Done;
@@ -576,7 +592,7 @@ namespace UnityNet.Tcp
             while (receivedBytes < size)
             {
                 // Allow a maximum receive of buffer.Length at a time.
-                var status = InnerReceive((byte*)data, size - receivedBytes, receivedBytes, out int result);
+                var status = InnerReceive((byte*)data + receivedBytes, size - receivedBytes, out int result);
 
                 receivedBytes += result;
 
@@ -605,10 +621,9 @@ namespace UnityNet.Tcp
         /// <param name="receivedBytes">The amount of copied to the buffer.</param>
         public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
         {
-            receivedBytes = 0;
-
             if (data == null || data.Length == 0)
             {
+                receivedBytes = 0;
                 Logger.Error(ExceptionHelper.INVALID_BUFFER);
                 return SocketStatus.Error;
             }
@@ -616,13 +631,17 @@ namespace UnityNet.Tcp
             if ((uint)size + (uint)offset > data.Length)
                 throw new ArgumentOutOfRangeException($"{nameof(size)} + {nameof(offset)} needs to be smaller than, or equal to {nameof(data.Length)}.");
 
+            return InnerReceive(data, offset, size, out receivedBytes);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
+        {
             receivedBytes = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
 
             if (receivedBytes > 0)
                 return SocketStatus.Done;
 
-            // If the socket returns 0 immediately with a SocketError.Success
-            // The connection has been shutdown by the remote endpoint.
             if (error == SocketError.Success)
                 return SocketStatus.Disconnected;
 
@@ -630,14 +649,14 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe SocketStatus InnerReceive(byte* data, int size, int offset, out int receivedBytes)
+        private unsafe SocketStatus InnerReceive(byte* data, int size, out int receivedBytes)
         {
             int maxBytes = Math.Min(size, m_buffer.Length);
             receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
 
             if (receivedBytes > 0)
             {
-                Memory.MemCpy(m_buffer, 0, data + offset, receivedBytes);
+                Memory.MemCpy(m_buffer, 0, data, receivedBytes);
                 return SocketStatus.Done;
             }
 
@@ -647,43 +666,92 @@ namespace UnityNet.Tcp
             return SocketStatusMapper.Map(error);
         }
 
-        public SocketStatus ReceiveUnsafe(ref NetPacket packet)
+
+        public SocketStatus Receive(ref NetPacket packet)
         {
             throw new NotImplementedException();
         }
 
         /// <summary>
-        /// Receives a packet from the <see cref="TcpSocket"/> and stores it in the provided <see cref="RawPacket"/>.
+        /// Receives a <see cref="RawPacket"/> from the <see cref="TcpSocket"/>.
+        /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        public SocketStatus ReceiveUnsafe(ref RawPacket packet)
+        public SocketStatus Receive(out RawPacket packet)
         {
-            // packet.clear
-
-            // Store this temporarily so we can read bytes into this value.
-            uint pendingPackSize = m_pendingPacket.Size;
-
-            uint packetSize = 0;
-            int received = 0;
-
-            // Try to get the size of the packet.
-            while (m_pendingPacket.SizeReceived < sizeof(uint))
+            var status = ReceivePacket();
+            if (status == SocketStatus.Done)
             {
-                byte* data = ((byte*)&pendingPackSize) + m_pendingPacket.SizeReceived;
-                var status = InnerReceive(data, sizeof(uint) - m_pendingPacket.SizeReceived, 0, out received);
-                m_pendingPacket.SizeReceived += received;
+                packet = new RawPacket((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+                m_pendingPacket = new PendingPacket();
+            }
+            else
+            {
+                // No complete packet received.
+                packet = default;
+            }
+            return status;
+        }
 
-                if (status != SocketStatus.Done)
-                    return status;
+        /// <summary>
+        /// Attempts to receive the next packet into <see cref="m_pendingPacket"/>.
+        /// </summary>
+        private SocketStatus ReceivePacket()
+        {
+            PendingPacket pendingPacket = m_pendingPacket;
+
+            int received = 0;
+            if (pendingPacket.SizeReceived < sizeof(int))
+            {
+                // Receive packet size.
+                while (pendingPacket.SizeReceived < sizeof(int))
+                {
+                    byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
+
+                    var status = InnerReceive(data, sizeof(int) - pendingPacket.SizeReceived, out received);
+                    pendingPacket.SizeReceived += received;
+
+                    if (status != SocketStatus.Done)
+                    {
+                        m_pendingPacket = pendingPacket;
+                        return status;
+                    }
+                }
+
+                // Allocate space for the packet to receive data.
+                if (pendingPacket.Size <= m_maxPacketSize)
+                    pendingPacket.Resize(pendingPacket.Size);
             }
 
-            // Write back the packet size.
-            packetSize = m_pendingPacket.Size = pendingPackSize;
+            // Receive packet data.
+            int dataReceived = pendingPacket.SizeReceived - sizeof(int);
+            while (dataReceived < pendingPacket.Size)
+            {
+                // Receive into buffer.
+                int amountToReceive = Math.Min(m_buffer.Length, pendingPacket.Size - dataReceived);
+                var status = InnerReceive(m_buffer, amountToReceive, 0, out received);
 
-            // Receive packet here...
-            // https://github.com/SFML/SFML/blob/498d7ee79c700bba767ca42f68ced8ca116b5ada/src/SFML/Network/TcpSocket.cpp#L377
+                // Received greater than 0 can only occur with a SocketStatus of Done
+                if (received > 0)
+                {
+                    if (pendingPacket.Size <= m_maxPacketSize)
+                        Memory.MemCpy(m_buffer, 0, pendingPacket.Data + dataReceived, received);
 
-            return SocketStatus.Error;
+                    dataReceived += received;
+                }
+                else
+                {
+                    pendingPacket.SizeReceived += dataReceived;
+                    m_pendingPacket = pendingPacket;
+
+                    return status;
+                }
+            }
+
+            pendingPacket.SizeReceived += dataReceived;
+            m_pendingPacket = pendingPacket;
+
+            return SocketStatus.Done;
         }
 
         /// <summary>
@@ -728,8 +796,7 @@ namespace UnityNet.Tcp
             }
 
             if (m_pendingPacket.Data != null)
-                Memory.Free(m_pendingPacket.Data);
-            m_pendingPacket.Data = null;
+                m_pendingPacket.Free();
 
             m_isClearedUp = true;
         }

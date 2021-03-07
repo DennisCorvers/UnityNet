@@ -9,35 +9,50 @@ using Unity.Collections.LowLevel.Unsafe;
 
 namespace UnityNet.Utils
 {
-    internal static unsafe class Memory
+    internal unsafe static class Memory
     {
-        public const int CACHE_LINE_SIZE = 64;
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void* Malloc(long size, int alignment = 8)
+        public static IntPtr Alloc(int size)
         {
 #if UNITY
-            return UnsafeUtility.Malloc(size, alignment, Unity.Collections.Allocator.Persistent);
+            return (IntPtr)UnsafeUtility.Malloc(size, 8, Unity.Collections.Allocator.Persistent);
 #else
-            // Marshal always allocates with an alignment of 8.
-            return (void*)Marshal.AllocHGlobal((int)size);
+            return Marshal.AllocHGlobal(size);
 #endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static T* Malloc<T>() where T : unmanaged
+        public static void Free(IntPtr ptr)
         {
-            return (T*)Malloc(sizeof(T), GetAlignment<T>());
+#if UNITY
+            UnsafeUtility.Free((void*)ptr, Unity.Collections.Allocator.Persistent);
+#else
+            Marshal.FreeHGlobal(ptr);
+#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Free(void* memory)
+        public static void Free(void* ptr)
         {
 #if UNITY
-            UnsafeUtility.Free(memory, Unity.Collections.Allocator.Persistent);
+            UnsafeUtility.Free(ptr, Unity.Collections.Allocator.Persistent);
 #else
-            Marshal.FreeHGlobal((IntPtr)memory);
+            Marshal.FreeHGlobal((IntPtr)ptr);
 #endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IntPtr Realloc(IntPtr ptr, int size, int newSize)
+        {
+            Debug.Assert(newSize > size);
+
+            // Create new buffer and copy old contents to new.
+            IntPtr newBuffer = Alloc(newSize);
+            MemCpy((void*)ptr, (void*)newBuffer, size);
+
+            // Free old buffer and return new buffer.
+            Free(ptr);
+            return newBuffer;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -46,222 +61,77 @@ namespace UnityNet.Utils
 #if UNITY
             UnsafeUtility.MemClear(ptr, size);
 #else
-            long c = size / 8; // longs
+            long c = size >> 3; // longs
 
             int i = 0;
             for (; i < c; i++)
                 *((ulong*)ptr + i) = 0;
 
-            i *= 8;
+            i = i << 3;
             for (; i < size; i++)
                 *((byte*)ptr + i) = 0;
 #endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void* MallocAndZero(int size, int alignment = 8)
+        public static IntPtr AllocZeroed(int size)
         {
-            return MallocAndZero((long)size, alignment);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void* MallocAndZero(long size, int alignment = 8)
-        {
-            var memory = Malloc(size, alignment);
-            ZeroMem(memory, size);
+            var memory = Alloc(size);
+            ZeroMem((void*)memory, size);
             return memory;
         }
 
-
-        public static T* MallocAndZero<T>() where T : unmanaged
+        public static IntPtr ReallocZeroed(IntPtr ptr, int size, int newSize)
         {
-            var memory = Malloc(sizeof(T), GetAlignment<T>());
-            ZeroMem(memory, sizeof(T));
-            return (T*)memory;
-        }
+            // Realloc existing buffer.
+            var newBuffer = Realloc(ptr, size, newSize);
 
-        public static T* MallocAndZeroArray<T>(int length) where T : unmanaged
-        {
-            var ptr = Malloc(sizeof(T) * length, GetAlignment<T>());
-            ZeroMem(ptr, sizeof(T) * length);
-            return (T*)ptr;
-        }
+            // Zero newly allocated bytes after copy.
+            ZeroMem(((byte*)newBuffer) + size, newSize - size);
 
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MemCpy(byte[] source, int offset, byte* destination, int size)
-        {
-#if UNITY
-            fixed (byte* ptr = source)
-            {
-                UnsafeUtility.MemCpy(destination, ptr + offset, size);
-            }
-#else
-            Marshal.Copy(source, offset, (IntPtr)destination, size);
-#endif
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MemCpy(byte* source, byte[] destination, int offset, int size)
-        {
-#if UNITY
-            fixed (byte* ptr = destination)
-            {
-                UnsafeUtility.MemCpy(ptr + offset, source, size);
-            }
-#else
-            Marshal.Copy((IntPtr)source, destination, offset, size);
-#endif
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MemCpy(void* source, void* destination, int size)
-        {
-#if UNITY
-            UnsafeUtility.MemCpy(destination, source, size);
-#else
-            Buffer.MemoryCopy(source, destination, size, size);
-#endif
-        }
-
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void MemMove(void* destination, void* source, int size)
-        {
-#if UNITY
-            UnsafeUtility.MemMove(destination, source, size);
-#else
-            Buffer.MemoryCopy(source, destination, size, size);
-#endif
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ArrayCopy<T>(void* source, int sourceIndex, void* destination, int destinationIndex, int count) where T : unmanaged
-        {
-            ArrayCopy(source, sourceIndex, destination, destinationIndex, count, sizeof(T));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ArrayCopy(void* source, int sourceIndex, void* destination, int destinationIndex, int count, int elementStride)
-        {
-            MemCpy(((byte*)destination) + (destinationIndex * elementStride), ((byte*)source) + (sourceIndex * elementStride), count * elementStride);
-        }
-
-        public static void ZeroArray<T>(T* ptr, int size) where T : unmanaged
-        {
-            ZeroMem(ptr, sizeof(T) * size);
-        }
-
-
-        public static void* ExpandZeroed(void* buffer, int currentSize, int newSize)
-        {
-            Debug.Assert(newSize > currentSize);
-
-            var oldBuffer = buffer;
-            var newBuffer = MallocAndZero(newSize);
-
-            // copy old contents
-            MemCpy(newBuffer, oldBuffer, currentSize);
-
-            // free old buffer
-            Free(oldBuffer);
-
-            // return the new size
             return newBuffer;
         }
 
-        public static void MemCpyFast(void* d, void* s, int size)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static void MemCpy(void* source, void* destination, int length)
         {
-            switch (size)
+#if UNITY
+            UnsafeUtility.MemCpy(destination, source, length);
+#else
+            Buffer.MemoryCopy(source, destination, length, length);
+#endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static void MemCpy(IntPtr source, IntPtr destination, int length)
+        {
+            MemCpy((void*)source, (void*)destination, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static void MemCpy(byte[] source, int sourceIndex, void* destination, int length)
+        {
+#if UNITY
+            fixed (byte* ptr = &source[sourceIndex])
             {
-                case 4:
-                    *(uint*)d = *(uint*)s;
-                    break;
-
-                case 8:
-                    *(ulong*)d = *(ulong*)s;
-                    break;
-
-                case 12:
-                    *((ulong*)d) = *((ulong*)s);
-                    *(((uint*)d) + 2) = *(((uint*)s) + 2);
-                    break;
-
-                case 16:
-                    *((ulong*)d) = *((ulong*)s);
-                    *((ulong*)d + 1) = *((ulong*)s + 1);
-                    break;
-
-                default:
-                    MemCpy(d, s, size);
-                    break;
+                MemCpy(ptr, destination, length);
             }
+#else
+            Marshal.Copy(source, sourceIndex, (IntPtr)destination, length);
+#endif
         }
 
-
-        public static int RoundToAlignment(int stride, int alignment)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static void MemCpy(void* source, byte[] destination, int destinationIndex, int length)
         {
-            switch (alignment)
+#if UNITY
+            fixed (byte* ptr = &destination[destinationIndex])
             {
-                case 1: return stride;
-                case 2: return ((stride + 1) >> 1) * 2;
-                case 4: return ((stride + 3) >> 2) * 4;
-                case 8: return ((stride + 7) >> 3) * 8;
-                default:
-                    throw new InvalidOperationException($"Invalid Alignment: {alignment}");
+                MemCpy(source, ptr, length);
             }
-        }
-
-        public static int GetAlignment<T>() where T : unmanaged
-        {
-            return GetAlignment(sizeof(T));
-        }
-
-        public static int GetAlignment(int stride)
-        {
-            if ((stride & 7) == 0)
-            {
-                return 8;
-            }
-
-            if ((stride & 3) == 0)
-            {
-                return 4;
-            }
-
-            return (stride & 1) == 0 ? 2 : 1;
-        }
-
-        public static int GetMaxAlignment(int a, int b)
-        {
-            return Math.Max(GetAlignment(a), GetAlignment(b));
-        }
-
-        public static int GetMaxAlignment(int a, int b, int c)
-        {
-            return Math.Max(GetMaxAlignment(a, b), GetAlignment(c));
-        }
-
-        public static int GetMaxAlignment(int a, int b, int c, int d)
-        {
-            return Math.Max(GetMaxAlignment(a, b, c), GetAlignment(d));
-        }
-
-        public static int GetMaxAlignment(int a, int b, int c, int d, int e)
-        {
-            return Math.Max(GetMaxAlignment(a, b, c, e), GetAlignment(e));
-        }
-
-        public static int RoundUpToPowerOf2(int i)
-        {
-            // Based on https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-            --i;
-            i |= i >> 1;
-            i |= i >> 2;
-            i |= i >> 4;
-            i |= i >> 8;
-            i |= i >> 16;
-            return i + 1;
+#else
+            Marshal.Copy((IntPtr)source, destination, destinationIndex, length);
+#endif
         }
     }
 }

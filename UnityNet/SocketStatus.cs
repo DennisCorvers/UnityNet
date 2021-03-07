@@ -3,28 +3,34 @@
     public enum SocketStatus : byte
     {
         /// <summary>
-        /// The socket has sent / received the data
+        /// The socket has sent / received the data.
         /// </summary>
         Done,
         /// <summary>
-        /// The socket is not ready to send / receive data yet
+        /// The socket is not ready to send / receive data yet.
         /// </summary>
         NotReady,
         /// <summary>
-        /// The socket sent a part of the data
+        /// The socket sent a part of the data.
         /// </summary>
         Partial,
         /// <summary>
-        /// The TCP socket has been disconnected
+        /// The TCP socket has been disconnected.
         /// </summary>
         Disconnected,
         /// <summary>
-        /// An unexpected error happened
+        /// An unexpected error happened.
         /// </summary>
         Error,
         /// <summary>
-        /// The blocking call timed-out
+        /// The blocking call timed-out.
         /// </summary>
-        TimedOut
+        TimedOut,
+        /// <summary>
+        /// The processed Packet size is too large to be processed.
+        /// </summary>
+        PacketSizeExceeded
+
+
     }
 }
