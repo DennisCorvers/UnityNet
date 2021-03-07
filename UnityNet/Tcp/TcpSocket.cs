@@ -18,8 +18,6 @@ namespace UnityNet.Tcp
         private Socket m_socket;
         private byte[] m_buffer;
 
-        private int m_maxPacketSize = 2;// ushort.MaxValue * 2;
-
         private bool m_isActive = false;
         private bool m_isClearedUp = false;
         private bool m_hasSharedBuffer = false;
@@ -114,8 +112,7 @@ namespace UnityNet.Tcp
         /// </summary>
         public int MaxPacketSize
         {
-            get => m_maxPacketSize;
-            set => m_maxPacketSize = value <= 0 ? throw new ArgumentOutOfRangeException() : value;
+            get => ushort.MaxValue;
         }
 
         /// <summary>
@@ -701,14 +698,14 @@ namespace UnityNet.Tcp
             PendingPacket pendingPacket = m_pendingPacket;
 
             int received = 0;
-            if (pendingPacket.SizeReceived < sizeof(int))
+            if (pendingPacket.SizeReceived < sizeof(ushort))
             {
                 // Receive packet size.
-                while (pendingPacket.SizeReceived < sizeof(int))
+                while (pendingPacket.SizeReceived < sizeof(ushort))
                 {
                     byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
 
-                    var status = InnerReceive(data, sizeof(int) - pendingPacket.SizeReceived, out received);
+                    var status = InnerReceive(data, sizeof(ushort) - pendingPacket.SizeReceived, out received);
                     pendingPacket.SizeReceived += received;
 
                     if (status != SocketStatus.Done)
@@ -718,13 +715,11 @@ namespace UnityNet.Tcp
                     }
                 }
 
-                // Allocate space for the packet to receive data.
-                if (pendingPacket.Size <= m_maxPacketSize)
-                    pendingPacket.Resize(pendingPacket.Size);
+                pendingPacket.Resize(pendingPacket.Size);
             }
 
             // Receive packet data.
-            int dataReceived = pendingPacket.SizeReceived - sizeof(int);
+            int dataReceived = pendingPacket.SizeReceived - sizeof(ushort);
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
@@ -734,9 +729,7 @@ namespace UnityNet.Tcp
                 // Received greater than 0 can only occur with a SocketStatus of Done
                 if (received > 0)
                 {
-                    if (pendingPacket.Size <= m_maxPacketSize)
-                        Memory.MemCpy(m_buffer, 0, pendingPacket.Data + dataReceived, received);
-
+                    Memory.MemCpy(m_buffer, 0, pendingPacket.Data + dataReceived, received);
                     dataReceived += received;
                 }
                 else

@@ -25,12 +25,6 @@
         /// <summary>
         /// The blocking call timed-out.
         /// </summary>
-        TimedOut,
-        /// <summary>
-        /// The processed Packet size is too large to be processed.
-        /// </summary>
-        PacketSizeExceeded
-
-
+        TimedOut
     }
 }
