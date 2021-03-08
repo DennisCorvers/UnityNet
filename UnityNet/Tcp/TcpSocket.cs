@@ -24,18 +24,6 @@ namespace UnityNet.Tcp
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
-        /// Gets/Sets the blocking state of the underlying socket.
-        /// </summary>
-        public bool Blocking
-        {
-            get { return m_socket.Blocking; }
-            set
-            {
-                if (m_socket.Handle != IntPtr.Zero)
-                    m_socket.Blocking = value;
-            }
-        }
-        /// <summary>
         /// Get the port to which the socket is remotely connected.
         /// If the socket is not connected, this property returns 0.
         /// </summary>
@@ -322,27 +310,6 @@ namespace UnityNet.Tcp
             }
         }
 
-        private SocketStatus InnerConnect(EndPoint endpoint)
-        {
-            try
-            {
-                m_socket.Connect(endpoint);
-                m_isActive = true;
-            }
-            catch (SocketException ex)
-            {
-                if (ex.ErrorCode == (int)SocketError.WouldBlock)
-                    return SocketStatus.NotReady;
-
-                Logger.Error(ex);
-                return SocketStatus.Error;
-            }
-
-            if (m_socket.Connected)
-                return SocketStatus.Done;
-
-            return SocketStatus.Disconnected;
-        }
 
         /// <summary>
         /// Starts connecting to the remote host.
@@ -524,44 +491,12 @@ namespace UnityNet.Tcp
         /// <param name="length">The amount of data to sent.</param>
         /// <param name="offset">The offset at which to start sending.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        /// <returns></returns>
         public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent)
         {
-            bytesSent = 0;
-
-            if (data == null || data.Length == 0)
-            {
-                Logger.Error(ExceptionHelper.NO_DATA);
-                return SocketStatus.Error;
-            }
-
-            if ((uint)length + (uint)offset > data.Length)
-                throw new ArgumentOutOfRangeException(nameof(length), length, $"{nameof(length)} needs smaller or equal to the length of {nameof(data)}.");
-
             return InnerSend(data, length, offset, out bytesSent);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerSend(byte[] data, int length, int offset, out int bytesSent)
-        {
-            int result = 0;
-            for (bytesSent = 0; bytesSent < length; bytesSent += result)
-            {
-                result = m_socket.Send(data, bytesSent + offset, length - bytesSent, SocketFlags.None, out SocketError error);
 
-                // No data was sent, why?
-                if (result == 0)
-                {
-                    SocketStatus status = SocketStatusMapper.Map(error);
-                    if (status == SocketStatus.NotReady && bytesSent > 0)
-                        return SocketStatus.Partial;
-
-                    return status;
-                }
-            }
-
-            return SocketStatus.Done;
-        }
 
         public SocketStatus Send(ref NetPacket packet)
         {
@@ -618,51 +553,8 @@ namespace UnityNet.Tcp
         /// <param name="receivedBytes">The amount of copied to the buffer.</param>
         public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
         {
-            if (data == null || data.Length == 0)
-            {
-                receivedBytes = 0;
-                Logger.Error(ExceptionHelper.INVALID_BUFFER);
-                return SocketStatus.Error;
-            }
-
-            if ((uint)size + (uint)offset > data.Length)
-                throw new ArgumentOutOfRangeException($"{nameof(size)} + {nameof(offset)} needs to be smaller than, or equal to {nameof(data.Length)}.");
-
-            return InnerReceive(data, offset, size, out receivedBytes);
+            return InnerReceive(data, size, offset, out receivedBytes);
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
-        {
-            receivedBytes = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
-
-            if (receivedBytes > 0)
-                return SocketStatus.Done;
-
-            if (error == SocketError.Success)
-                return SocketStatus.Disconnected;
-
-            return SocketStatusMapper.Map(error);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe SocketStatus InnerReceive(byte* data, int size, out int receivedBytes)
-        {
-            int maxBytes = Math.Min(size, m_buffer.Length);
-            receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
-
-            if (receivedBytes > 0)
-            {
-                Memory.MemCpy(m_buffer, 0, data, receivedBytes);
-                return SocketStatus.Done;
-            }
-
-            if (error == SocketError.Success)
-                return SocketStatus.Disconnected;
-
-            return SocketStatusMapper.Map(error);
-        }
-
 
         public SocketStatus Receive(ref NetPacket packet)
         {
@@ -690,9 +582,30 @@ namespace UnityNet.Tcp
             return status;
         }
 
-        /// <summary>
-        /// Attempts to receive the next packet into <see cref="m_pendingPacket"/>.
-        /// </summary>
+
+        #region Internal Methods
+        private SocketStatus InnerConnect(EndPoint endpoint)
+        {
+            try
+            {
+                m_socket.Connect(endpoint);
+                m_isActive = true;
+            }
+            catch (SocketException ex)
+            {
+                if (ex.ErrorCode == (int)SocketError.WouldBlock)
+                    return SocketStatus.NotReady;
+
+                Logger.Error(ex);
+                return SocketStatus.Error;
+            }
+
+            if (m_socket.Connected)
+                return SocketStatus.Done;
+
+            return SocketStatus.Disconnected;
+        }
+
         private SocketStatus ReceivePacket()
         {
             PendingPacket pendingPacket = m_pendingPacket;
@@ -746,6 +659,62 @@ namespace UnityNet.Tcp
 
             return SocketStatus.Done;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(void* data, int size, out int receivedBytes)
+        {
+            int maxBytes = Math.Min(size, m_buffer.Length);
+            receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
+
+            if (receivedBytes > 0)
+            {
+                Memory.MemCpy(m_buffer, 0, data, receivedBytes);
+                return SocketStatus.Done;
+            }
+
+            if (error == SocketError.Success)
+                return SocketStatus.Disconnected;
+
+            return SocketStatusMapper.Map(error);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
+        {
+            receivedBytes = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
+
+            if (receivedBytes > 0)
+                return SocketStatus.Done;
+
+            if (error == SocketError.Success)
+                return SocketStatus.Disconnected;
+
+            return SocketStatusMapper.Map(error);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerSend(byte[] data, int length, int offset, out int bytesSent)
+        {
+            int result = 0;
+            for (bytesSent = 0; bytesSent < length; bytesSent += result)
+            {
+                result = m_socket.Send(data, bytesSent + offset, length - bytesSent, SocketFlags.None, out SocketError error);
+
+                // No data was sent, why?
+                if (result == 0)
+                {
+                    SocketStatus status = SocketStatusMapper.Map(error);
+                    if (status == SocketStatus.NotReady && bytesSent > 0)
+                        return SocketStatus.Partial;
+
+                    return status;
+                }
+            }
+
+            return SocketStatus.Done;
+        }
+        #endregion
+
 
         /// <summary>
         /// Disposes the TCP Connection.
