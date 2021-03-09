@@ -56,6 +56,16 @@ namespace UnityNet.Utils
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IntPtr ReallocWithoutCopy(IntPtr ptr, int newSize)
+        {
+            // Free old.
+            Free(ptr);
+
+            // Allocate new.
+            return Alloc(newSize);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ZeroMem(void* ptr, long size)
         {
 #if UNITY

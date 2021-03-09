@@ -8,6 +8,8 @@ namespace UnityNet.Serialization
 {
     public unsafe struct NetPacket : IDisposable
     {
+        private const int DefaultSize = 16;
+
 #pragma warning disable IDE0032
         ulong* m_data;
         // The total size of m_data in bytes.
@@ -64,7 +66,29 @@ namespace UnityNet.Serialization
 
         private void Resize(int bufferBitSize)
         {
+            if (m_capacity < bufferBitSize)
+            {
+                int newByteSize = 0;
 
+                // Allocate a new buffer.
+                if (m_data == null)
+                {
+                    int newBitSize = Math.Max(DefaultSize * 8, bufferBitSize);
+                    newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
+
+                    m_data = (ulong*)Memory.Alloc(newByteSize);
+                }
+                // Double the existing capacity.
+                else
+                {
+                    int newBitSize = Math.Max(m_capacity * 2, bufferBitSize);
+                    newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
+
+                    m_data = (ulong*)Memory.Realloc((IntPtr)m_data, m_capacity >> 3, newByteSize);
+                }
+
+                m_capacity = newByteSize * 8;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -79,11 +103,13 @@ namespace UnityNet.Serialization
             if (m_capacity < size * 8)
             {
                 int alignedSize = MathUtils.GetNextMultipleOf8(size);
-                if (m_capacity == 0)
-                    m_data = (ulong*)Memory.Alloc(alignedSize);
-                else
-                    m_data = (ulong*)Memory.Realloc((IntPtr)m_data, m_capacity, alignedSize);
 
+                // Free any existing buffer.
+                if (m_data != null)
+                    Memory.Free(m_data);
+
+                // Allocate the expanded one. We don't need to preserve old data.
+                m_data = (ulong*)Memory.Alloc(alignedSize);
                 m_capacity = alignedSize * 8;
             }
 
@@ -94,11 +120,6 @@ namespace UnityNet.Serialization
         internal void OnSend()
         {
             // TODO
-        }
-
-        public static implicit operator bool(NetPacket packet)
-        {
-            return packet.IsValid;
         }
 
         public void Dispose()
