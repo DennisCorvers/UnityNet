@@ -13,8 +13,12 @@ namespace UnityNet.Tcp
         private byte[] m_sharedBuffer = null;
         private Socket m_socket;
 
-        private bool m_isDisposed = false;
-        private bool m_isActive = false;
+        private bool m_isActive;
+        private bool m_exclusiveAddressUse;
+
+        private bool? m_allowNatTraversal;
+
+        private bool m_isDisposed;
         private bool m_shareBuffer;
 #pragma warning restore IDE0032, IDE0044
 
@@ -23,18 +27,6 @@ namespace UnityNet.Tcp
         /// </summary>
         public bool IsActive
             => m_isActive;
-        /// <summary>
-        /// Gets/Sets the blocking state of the underlying socket.
-        /// </summary>
-        public bool Blocking
-        {
-            get { return m_socket.Blocking; }
-            set
-            {
-                if (m_socket.Handle != IntPtr.Zero)
-                    m_socket.Blocking = value;
-            }
-        }
         /// <summary>
         /// Get the port to which the socket is bound locally.
         /// If the socket is not listening to a port, this property returns 0.
@@ -48,6 +40,7 @@ namespace UnityNet.Tcp
                 return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
             }
         }
+
         public IPAddress BoundAddress
         {
             get
@@ -103,15 +96,30 @@ namespace UnityNet.Tcp
 
         public void AllowNatTraversal(bool isallowed)
         {
-            if (IsActive)
-                Logger.Error(new InvalidOperationException("Tcp listener must be stopped."));
+            if (m_isActive)
+                throw new InvalidOperationException("Tcp listener must be stopped.");
 
+            if (m_socket != null)
+                SetIPProtectionLevel(isallowed);
             else
+                m_allowNatTraversal = isallowed;
+        }
+
+        public bool ExclusiveAddressUse
+        {
+            get
             {
-                if (isallowed)
-                    m_socket.SetIPProtectionLevel(IPProtectionLevel.Unrestricted);
-                else
-                    m_socket.SetIPProtectionLevel(IPProtectionLevel.EdgeRestricted);
+                return m_socket != null ? m_socket.ExclusiveAddressUse : m_exclusiveAddressUse;
+            }
+            set
+            {
+                if (m_isActive)
+                    throw new InvalidOperationException("Tcp listener must be stopped.");
+
+                if (m_socket != null)
+                    m_socket.ExclusiveAddressUse = value;
+
+                m_exclusiveAddressUse = value;
             }
         }
 
@@ -162,14 +170,17 @@ namespace UnityNet.Tcp
             if (endpoint == null)
                 throw new ArgumentNullException();
 
+            CreateNewSocketIfNeeded();
+
             m_socket.Bind(endpoint);
+
             try
             {
                 m_socket.Listen(SOMAXCONN);
             }
             catch (Exception ex)
             {
-                Close(true);
+                Stop();
                 Logger.Error(ex);
                 return SocketStatus.Error;
             }
@@ -179,25 +190,44 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
+        /// Determines if there are pending connection requests.
+        /// </summary>
+        /// <param name="microSeconds">The timeout in microseconds.</param>
+        public bool ConnectionPending(int microSeconds = 0)
+        {
+            if (!m_isActive)
+                ExceptionHelper.ThrowNotListening();
+
+            return m_socket.Poll(microSeconds, SelectMode.SelectRead);
+        }
+
+        /// <summary>
         /// Accept a new connection
-        ///
-        /// If the socket is in blocking mode, this function will
-        /// not return until a connection is actually received.
         /// </summary>
         /// <param name="socket">Socket that will hold the new connection</param>
         public SocketStatus Accept(out TcpSocket socket)
         {
-            if (!m_socket.IsBound)
+            return Accept(out socket, 0);
+        }
+
+        /// <summary>
+        /// Accept a new connection.
+        /// </summary>
+        /// <param name="socket">Socket that will hold the new connection</param>
+        /// <param name="microSeconds">The time in microseconds that this function blocks until a connection is available.</param>
+        public SocketStatus Accept(out TcpSocket socket, int microSeconds)
+        {
+            if (!m_isActive)
             {
                 ExceptionHelper.ThrowNotListening();
                 socket = null;
                 return SocketStatus.Error;
             }
 
-            if (!m_socket.Poll(0, SelectMode.SelectRead))
+            if (!m_socket.Poll(microSeconds, SelectMode.SelectRead))
             {
                 socket = null;
-                return SocketStatus.Error;
+                return SocketStatus.NotReady;
             }
 
             var acceptedSocket = m_socket.Accept();
@@ -213,18 +243,40 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Closes the network connection.
         /// </summary>
-        public void Close(bool reuseListener = false)
+        public void Stop()
         {
-            // TODO Rewrite this
-            if (m_socket.IsBound)
-            {
-                m_socket.Close();
-                m_socket = null;
+            if (!m_isActive)
+                return;
 
-                if (reuseListener)
-                    m_socket = CreateListener();
-            }
+            m_socket.Close();
             m_isActive = false;
+            m_socket = null;
+        }
+
+        private void SetIPProtectionLevel(bool allowed)
+        {
+            m_socket.SetIPProtectionLevel(allowed ? IPProtectionLevel.Unrestricted : IPProtectionLevel.EdgeRestricted);
+        }
+
+        private void CreateNewSocketIfNeeded()
+        {
+            // Don't allow recreation of the socket when this object is disposed.
+            if (m_isDisposed)
+                throw new ObjectDisposedException(GetType().Name);
+
+            if (m_socket != null)
+                return;
+
+            m_socket = CreateListener();
+
+            if (m_exclusiveAddressUse)
+                m_socket.ExclusiveAddressUse = true;
+
+            if (m_allowNatTraversal != null)
+            {
+                SetIPProtectionLevel(m_allowNatTraversal.GetValueOrDefault());
+                m_allowNatTraversal = null;
+            }
         }
 
         /// <summary>
@@ -235,9 +287,8 @@ namespace UnityNet.Tcp
             GC.SuppressFinalize(this);
             if (!m_isDisposed)
             {
-                m_socket.Close();
+                Stop();
                 m_isDisposed = true;
-                m_isActive = false;
             }
         }
     }

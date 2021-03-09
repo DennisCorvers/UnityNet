@@ -60,6 +60,14 @@ namespace UnityNet.Tcp
                 return ((IPEndPoint)m_socket.RemoteEndPoint).Address;
             }
         }
+        /// <summary>
+        /// Gets or sets a value that indicates whether the <see cref="TcpSocket"/> is in blocking mode.
+        /// </summary>
+        public bool Blocking
+        {
+            get { return m_socket.Blocking; }
+            set { m_socket.Blocking = value; }
+        }
 
         /// <summary>
         /// Gets or sets the size of the receive buffer in bytes.
@@ -78,7 +86,8 @@ namespace UnityNet.Tcp
             set { m_socket.SendBufferSize = value; }
         }
         /// <summary>
-        /// Gets or sets the receive time out value of the connection in seconds.
+        /// Gets or sets the receive time out value of the connection in milliseconds.
+        /// Only has an effect when the <see cref="TcpSocket"/> is in blocking mode.
         /// </summary>
         public int ReceiveTimeout
         {
@@ -86,7 +95,8 @@ namespace UnityNet.Tcp
             set { m_socket.ReceiveTimeout = value; }
         }
         /// <summary>
-        /// Gets or sets the send time out value of the connection in seconds.
+        /// Gets or sets the send time out value of the connection in milliseconds.
+        /// Only has an effect when the <see cref="TcpSocket"/> is in blocking mode.
         /// </summary>
         public int SendTimeout
         {
@@ -112,7 +122,7 @@ namespace UnityNet.Tcp
         /// Indication that a connection has been made.
         /// </summary>
         public bool IsActive
-=> m_isActive;
+            => m_isActive;
         /// <summary>
         /// Indicates if the TcpSocket is using a buffer that is shared between other TcpSocket instances.
         /// </summary>
@@ -600,7 +610,6 @@ namespace UnityNet.Tcp
             return status;
         }
 
-
         #region Internal Methods
         private SocketStatus InnerConnect(EndPoint endpoint)
         {
@@ -737,7 +746,7 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Disposes the TCP Connection.
         /// </summary>
-        /// <param name="reuseSocket">TRUE to create a new underlying socket.</param>
+        /// <param name="reuseSocket">TRUE to create a new underlying socket. Resets all previously set socket options.</param>
         public void Close(bool reuseSocket = false)
         {
             if (m_isActive)
@@ -748,6 +757,7 @@ namespace UnityNet.Tcp
                 if (reuseSocket)
                 {
                     m_socket = CreateSocket();
+                    m_isClearedUp = false;
                 }
             }
         }
@@ -779,6 +789,7 @@ namespace UnityNet.Tcp
                 m_pendingPacket.Free();
 
             m_isClearedUp = true;
+            m_isActive = false;
         }
 
         public void Dispose()
