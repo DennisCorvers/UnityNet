@@ -15,7 +15,6 @@ namespace UnityNetTest.TcpTests
         {
             TcpSocket sock = new TcpSocket();
 
-            Assert.AreEqual(sock.Blocking, false);
             Assert.AreEqual(sock.Connected, false);
             Assert.AreEqual(sock.RemoteAddress, IPAddress.None);
         }

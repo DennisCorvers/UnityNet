@@ -27,7 +27,7 @@ namespace UnityNet.Serialization
             internal set;
         }
 
-        internal RawPacket(IntPtr data, int sizeInBytes)
+        public RawPacket(IntPtr data, int sizeInBytes)
         {
             Size = sizeInBytes;
             Data = data;

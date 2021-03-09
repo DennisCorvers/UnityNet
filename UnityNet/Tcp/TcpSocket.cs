@@ -556,9 +556,24 @@ namespace UnityNet.Tcp
             return InnerReceive(data, size, offset, out receivedBytes);
         }
 
+        /// <summary>
+        /// Copies received data into the supplied NetPacket.
+        /// Must be disposed after use.
+        /// </summary>
+        /// <param name="packet">Packet to copy the data into.</param>
         public SocketStatus Receive(ref NetPacket packet)
         {
-            throw new NotImplementedException();
+            var status = ReceivePacket();
+            if (status == SocketStatus.Done)
+            {
+                packet.Clear();
+                packet.OnReceive(m_pendingPacket.Data, m_pendingPacket.Size);
+
+                // Reset the PendingPacket, but keep the internal buffer since we only made a copy.
+                m_pendingPacket.Clear();
+            }
+
+            return status;
         }
 
         /// <summary>
@@ -572,6 +587,9 @@ namespace UnityNet.Tcp
             if (status == SocketStatus.Done)
             {
                 packet = new RawPacket((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+
+                // Reset Pending packet completely, as we've passed on its internal buffer.
+                // PendingPacket.Resize will allocate a new buffer.
                 m_pendingPacket = new PendingPacket();
             }
             else

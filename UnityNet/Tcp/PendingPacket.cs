@@ -6,14 +6,16 @@ namespace UnityNet.Tcp
 {
     internal unsafe struct PendingPacket
     {
-        internal int DataSize;
+        internal int Capacity
+        { get; private set; }
         internal int Size;
         internal int SizeReceived;
-        internal byte* Data;
+        internal byte* Data
+        { get; private set; }
 
         internal void Resize(int newSize)
         {
-            if (newSize > DataSize)
+            if (newSize > Capacity)
             {
                 if (Data == null)
                 {
@@ -23,7 +25,16 @@ namespace UnityNet.Tcp
                 {
                     Data = (byte*)Memory.Realloc((IntPtr)Data, Size, newSize);
                 }
+
+                Capacity = newSize;
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Clear()
+        {
+            Size = 0;
+            SizeReceived = 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -32,7 +43,9 @@ namespace UnityNet.Tcp
             Memory.Free(Data);
 
             Data = null;
-            DataSize = 0;
+            Capacity = 0;
+            Size = 0;
+            SizeReceived = 0;
         }
     }
 }
