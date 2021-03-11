@@ -60,7 +60,7 @@ namespace UnityNet.Tcp
         /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         public TcpListener()
-            : this(false)
+            : this(true)
         { }
 
         /// <summary>

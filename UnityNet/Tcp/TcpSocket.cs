@@ -10,7 +10,9 @@ namespace UnityNet.Tcp
 {
     public unsafe sealed class TcpSocket : IDisposable
     {
-        internal const int BUFFER_SIZE = 1024;
+        // 1380 is a conservative MTU size.
+        internal const int BUFFER_SIZE = 1380;
+        internal const int MAX_PACKET_SIZE = ushort.MaxValue;
 
 #pragma warning disable IDE0032, IDE0044
         private PendingPacket m_pendingPacket;
@@ -18,9 +20,9 @@ namespace UnityNet.Tcp
         private Socket m_socket;
         private byte[] m_buffer;
 
-        private bool m_isActive = false;
-        private bool m_isClearedUp = false;
-        private bool m_hasSharedBuffer = false;
+        private bool m_isActive;
+        private bool m_isClearedUp;
+        private bool m_hasSharedBuffer;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
@@ -147,7 +149,7 @@ namespace UnityNet.Tcp
         /// </summary>
         public TcpSocket()
         {
-            m_socket = CreateSocket();
+            CreateSocket();
             m_buffer = new byte[BUFFER_SIZE];
         }
 
@@ -191,10 +193,7 @@ namespace UnityNet.Tcp
             m_buffer = buffer;
         }
 
-        ~TcpSocket()
-        {
-            Dispose(false);
-        }
+        ~TcpSocket() => Dispose(false);
 
 
         /// <summary>
@@ -212,10 +211,10 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Creates and configures a new socket.
         /// </summary>
-        private Socket CreateSocket()
+        private void CreateSocket()
         {
-            m_isActive = false;
-            return ConfigureSocket(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp));
+            if (m_socket == null)
+                m_socket = ConfigureSocket(new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp));
         }
 
 
@@ -369,6 +368,7 @@ namespace UnityNet.Tcp
                 {
                     Logger.Error(e);
                     innerTcs.TrySetResult(SocketStatus.Error);
+                    return;
                 }
 
                 if (m_socket.Connected)
@@ -449,7 +449,7 @@ namespace UnityNet.Tcp
             for (; bytesSent < size; bytesSent += result)
             {
                 // Copy unmanaged data to managed buffer.
-                int toSend = Math.Min(m_buffer.Length, size - bytesSent);
+                int toSend = Math.Min(BUFFER_SIZE, size - bytesSent);
                 Memory.MemCpy((byte*)data + bytesSent, m_buffer, 0, toSend);
 
                 // Send managed buffer.
@@ -506,11 +506,23 @@ namespace UnityNet.Tcp
             return InnerSend(data, length, offset, out bytesSent);
         }
 
-
+        public SocketStatus Send(ref RawPacket packet)
+        {
+            return SocketStatus.Error;
+        }
 
         public SocketStatus Send(ref NetPacket packet)
         {
+            // TODO: Limit maximum packet size.
             //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
+            int packetSize = packet.ByteSize;
+            byte* packetData = (byte*)packet.Data;
+
+            // Unprocessed packet.
+            if (packet.SendPosition < sizeof(ushort))
+            {
+                //byte* sizePtr = ()
+            }
 
             return SocketStatus.Done;
         }
@@ -663,7 +675,7 @@ namespace UnityNet.Tcp
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
-                int amountToReceive = Math.Min(m_buffer.Length, pendingPacket.Size - dataReceived);
+                int amountToReceive = Math.Min(BUFFER_SIZE, pendingPacket.Size - dataReceived);
                 var status = InnerReceive(m_buffer, amountToReceive, 0, out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
@@ -690,7 +702,7 @@ namespace UnityNet.Tcp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SocketStatus InnerReceive(void* data, int size, out int receivedBytes)
         {
-            int maxBytes = Math.Min(size, m_buffer.Length);
+            int maxBytes = Math.Min(size, BUFFER_SIZE);
             receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
 
             if (receivedBytes > 0)
@@ -742,7 +754,6 @@ namespace UnityNet.Tcp
         }
         #endregion
 
-
         /// <summary>
         /// Disposes the TCP Connection.
         /// </summary>
@@ -756,7 +767,7 @@ namespace UnityNet.Tcp
 
                 if (reuseSocket)
                 {
-                    m_socket = CreateSocket();
+                    CreateSocket();
                     m_isClearedUp = false;
                 }
             }
@@ -773,9 +784,7 @@ namespace UnityNet.Tcp
                 {
                     try
                     {
-                        // Shutdown the connection if there's one in progress.
-                        if (m_socket.Connected)
-                            m_socket.Shutdown(SocketShutdown.Both);
+                        m_socket.Shutdown(SocketShutdown.Both);
                     }
                     finally
                     {
@@ -783,6 +792,8 @@ namespace UnityNet.Tcp
                         m_socket = null;
                     }
                 }
+
+                GC.SuppressFinalize(this);
             }
 
             if (m_pendingPacket.Data != null)
@@ -793,9 +804,6 @@ namespace UnityNet.Tcp
         }
 
         public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+            => Dispose(true);
     }
 }

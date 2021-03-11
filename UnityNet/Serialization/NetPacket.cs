@@ -22,6 +22,11 @@ namespace UnityNet.Serialization
         bool m_isValid;
 #pragma warning restore IDE0032
 
+        internal void* Data
+            => m_data;
+        internal int SendPosition
+            => m_sendPosition;
+
         /// <summary>
         /// Returns <see langword="true"/> if the previosu Read operation was successful.
         /// </summary>
@@ -54,15 +59,9 @@ namespace UnityNet.Serialization
         public int ByteCapacity
             => m_capacity >> 3;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Clear()
-        {
-            m_size = 0;
-            m_readPosition = 0;
-            m_sendPosition = 0;
 
-            m_isValid = true;
-        }
+
+
 
         private void Resize(int bufferBitSize)
         {
@@ -115,11 +114,17 @@ namespace UnityNet.Serialization
 
             m_size = size * 8;
             Memory.MemCpy(data, m_data, size);
+            m_isValid = true;
         }
 
-        internal void OnSend()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void Clear()
         {
-            // TODO
+            m_size = 0;
+            m_readPosition = 0;
+            m_sendPosition = 0;
+
+            m_isValid = true;
         }
 
         public void Dispose()
