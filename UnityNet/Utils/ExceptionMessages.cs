@@ -1,4 +1,5 @@
 ﻿using System;
+using UnityNet.Tcp;
 
 namespace UnityNet.Utils
 {
@@ -18,6 +19,11 @@ namespace UnityNet.Utils
         internal static void ThrowAlreadyBound()
         {
             throw new InvalidOperationException("TcpListener is already bound. Call Close() first.");
+        }
+
+        internal static void ThrowPacketSizeExceeded()
+        {
+            throw new InvalidOperationException($"Maximum packet size of {TcpSocket.MAX_PACKET_SIZE} exceeded.");
         }
     }
 }

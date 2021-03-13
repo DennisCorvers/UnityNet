@@ -11,6 +11,11 @@ namespace UnityNet.Serialization
     public struct RawPacket : IDisposable
     {
         /// <summary>
+        /// Used for keeping track of partial packet sends.
+        /// </summary>
+        internal int SendPosition;
+
+        /// <summary>
         /// The total size of Data in bytes.
         /// </summary>
         public int Size
@@ -31,6 +36,7 @@ namespace UnityNet.Serialization
         {
             Size = sizeInBytes;
             Data = data;
+            SendPosition = 0;
         }
 
         public void Dispose()

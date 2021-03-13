@@ -1,3 +1,1 @@
-﻿#if DEBUG
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("UnityNetTest")]
-#endif
+﻿[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("UnityNetTest")]

@@ -11,8 +11,9 @@ namespace UnityNet.Tcp
     public unsafe sealed class TcpSocket : IDisposable
     {
         // 1380 is a conservative MTU size.
-        internal const int BUFFER_SIZE = 1380;
+        internal const int BUFFER_SIZE = 3;// 1380;
         internal const int MAX_PACKET_SIZE = ushort.MaxValue;
+        private const int HEADER_SIZE = sizeof(ushort);
 
 #pragma warning disable IDE0032, IDE0044
         private PendingPacket m_pendingPacket;
@@ -251,7 +252,7 @@ namespace UnityNet.Tcp
                 throw new ArgumentNullException(nameof(hostname));
 
             if (m_isClearedUp)
-                throw new ObjectDisposedException(this.GetType().FullName);
+                throw new ObjectDisposedException(GetType().FullName);
 
             if (m_isActive)
                 throw new InvalidOperationException("Socket is already connected.");
@@ -506,26 +507,24 @@ namespace UnityNet.Tcp
             return InnerSend(data, length, offset, out bytesSent);
         }
 
+        /// <summary>
+        /// Sends a <see cref="RawPacket"/> over the TcpSocket.
+        /// </summary>
+        /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref RawPacket packet)
         {
-            return SocketStatus.Error;
+            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition);
         }
 
+        /// <summary>
+        /// Sends a <see cref="NetPacket"/> over the TcpSocket.
+        /// </summary>
+        /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref NetPacket packet)
         {
-            // TODO: Limit maximum packet size.
-            //https://github.com/SFML/SFML/blob/master/src/SFML/Network/TcpSocket.cpp#L301
-            int packetSize = packet.ByteSize;
-            byte* packetData = (byte*)packet.Data;
-
-            // Unprocessed packet.
-            if (packet.SendPosition < sizeof(ushort))
-            {
-                //byte* sizePtr = ()
-            }
-
-            return SocketStatus.Done;
+            return InnerSend(packet.Data, packet.ByteSize, ref packet.SendPosition);
         }
+
 
         /// <summary>
         /// Receives raw data from the <see cref="TcpSocket"/>.
@@ -588,7 +587,6 @@ namespace UnityNet.Tcp
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                packet.Clear();
                 packet.OnReceive(m_pendingPacket.Data, m_pendingPacket.Size);
 
                 // Reset the PendingPacket, but keep the internal buffer since we only made a copy.
@@ -622,6 +620,7 @@ namespace UnityNet.Tcp
             return status;
         }
 
+
         #region Internal Methods
         private SocketStatus InnerConnect(EndPoint endpoint)
         {
@@ -650,14 +649,14 @@ namespace UnityNet.Tcp
             PendingPacket pendingPacket = m_pendingPacket;
 
             int received = 0;
-            if (pendingPacket.SizeReceived < sizeof(ushort))
+            if (pendingPacket.SizeReceived < HEADER_SIZE)
             {
                 // Receive packet size.
-                while (pendingPacket.SizeReceived < sizeof(ushort))
+                while (pendingPacket.SizeReceived < HEADER_SIZE)
                 {
                     byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
 
-                    var status = InnerReceive(data, sizeof(ushort) - pendingPacket.SizeReceived, out received);
+                    var status = InnerReceive(data, HEADER_SIZE - pendingPacket.SizeReceived, out received);
                     pendingPacket.SizeReceived += received;
 
                     if (status != SocketStatus.Done)
@@ -671,7 +670,7 @@ namespace UnityNet.Tcp
             }
 
             // Receive packet data.
-            int dataReceived = pendingPacket.SizeReceived - sizeof(ushort);
+            int dataReceived = pendingPacket.SizeReceived - HEADER_SIZE;
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
@@ -752,6 +751,53 @@ namespace UnityNet.Tcp
 
             return SocketStatus.Done;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerSend(void* data, int packetSize, ref int sendPosition)
+        {
+            if (packetSize > MAX_PACKET_SIZE)
+                ExceptionHelper.ThrowPacketSizeExceeded();
+
+            // Send packet header (and remaining data that fits within the buffer)
+            if (sendPosition < HEADER_SIZE)
+            {
+                byte* sendPosPtr = (byte*)&packetSize + sendPosition;
+                int sizeToCopy = Math.Min(BUFFER_SIZE - HEADER_SIZE, packetSize);
+
+                fixed (byte* bufPtr = &m_buffer[sendPosition])
+                {
+                    Memory.MemCpy(sendPosPtr, bufPtr, HEADER_SIZE - sendPosition);
+                    Memory.MemCpy(data, bufPtr + 2, sizeToCopy);
+                }
+
+                var status = InnerSend(m_buffer, sizeToCopy + HEADER_SIZE, 0, out sendPosition);
+
+                if (status != SocketStatus.Done)
+                    return status;
+            }
+
+            // Send packet body.
+            int dataOffset = sendPosition - HEADER_SIZE;
+            while (dataOffset < packetSize)
+            {
+                int toSend = Math.Min(BUFFER_SIZE, packetSize - dataOffset);
+                Memory.MemCpy((byte*)data + dataOffset, m_buffer, 0, toSend);
+
+                var status = InnerSend(m_buffer, toSend, 0, out int bytesSent);
+                dataOffset += bytesSent;
+
+                if (status != SocketStatus.Done)
+                {
+                    sendPosition = dataOffset + HEADER_SIZE;
+                    return status;
+                }
+            }
+
+            // All sends completed at this point.
+            sendPosition = 0;
+
+            return SocketStatus.Done;
+        }
         #endregion
 
         /// <summary>
@@ -784,7 +830,8 @@ namespace UnityNet.Tcp
                 {
                     try
                     {
-                        m_socket.Shutdown(SocketShutdown.Both);
+                        if (m_socket.Connected)
+                            m_socket.Shutdown(SocketShutdown.Both);
                     }
                     finally
                     {
