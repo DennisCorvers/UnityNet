@@ -11,7 +11,7 @@ namespace UnityNet.Tcp
     public unsafe sealed class TcpSocket : IDisposable
     {
         // 1380 is a conservative MTU size.
-        internal const int BUFFER_SIZE = 3;// 1380;
+        internal const int BUFFER_SIZE = 1380;
         internal const int MAX_PACKET_SIZE = ushort.MaxValue;
         private const int HEADER_SIZE = sizeof(ushort);
 
@@ -522,7 +522,7 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref NetPacket packet)
         {
-            return InnerSend(packet.Data, packet.ByteSize, ref packet.SendPosition);
+            return InnerSend(packet.Data, packet.Size, ref packet.SendPosition);
         }
 
 

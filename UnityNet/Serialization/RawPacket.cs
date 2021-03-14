@@ -42,6 +42,8 @@ namespace UnityNet.Serialization
         public void Dispose()
         {
             Memory.Free(Data);
+            Data = IntPtr.Zero;
+            Size = 0;
         }
     }
 }

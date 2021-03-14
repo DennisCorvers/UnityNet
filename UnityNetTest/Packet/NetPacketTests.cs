@@ -28,8 +28,8 @@ namespace UnityNetTest.Packet
         public void OnReceiveEmptyTest()
         {
             var pack = CreatePacket(7);
-            Assert.AreEqual(8, pack.ByteCapacity);
-            Assert.AreEqual(7, pack.ByteSize);
+            Assert.AreEqual(8, pack.Capacity);
+            Assert.AreEqual(7, pack.Size);
 
             Assert.IsTrue(pack.IsValid);
             Assert.IsTrue(pack.Data != null);
@@ -41,8 +41,8 @@ namespace UnityNetTest.Packet
         public void OnReceiveResizeTest()
         {
             var pack = CreatePacket(8);
-            Assert.AreEqual(8, pack.ByteCapacity);
-            Assert.AreEqual(8, pack.ByteSize);
+            Assert.AreEqual(8, pack.Capacity);
+            Assert.AreEqual(8, pack.Size);
 
             var dataPtr = (ulong)pack.Data;
 
@@ -51,8 +51,8 @@ namespace UnityNetTest.Packet
             pack.OnReceive(ptr.ToPointer(), 14);
 
             Assert.IsFalse(dataPtr == (ulong)pack.Data);
-            Assert.AreEqual(16, pack.ByteCapacity);
-            Assert.AreEqual(14, pack.ByteSize);
+            Assert.AreEqual(16, pack.Capacity);
+            Assert.AreEqual(14, pack.Size);
 
             pack.Dispose();
         }
@@ -61,8 +61,8 @@ namespace UnityNetTest.Packet
         public void OnReceiveTest()
         {
             var pack = CreatePacket(16);
-            Assert.AreEqual(16, pack.ByteCapacity);
-            Assert.AreEqual(16, pack.ByteSize);
+            Assert.AreEqual(16, pack.Capacity);
+            Assert.AreEqual(16, pack.Size);
             Assert.IsTrue(pack.IsValid);
 
             var dataPtr = (ulong)pack.Data;
@@ -72,8 +72,8 @@ namespace UnityNetTest.Packet
             pack.OnReceive(ptr.ToPointer(), 8);
 
             Assert.IsTrue(dataPtr == (ulong)pack.Data);
-            Assert.AreEqual(16, pack.ByteCapacity);
-            Assert.AreEqual(8, pack.ByteSize);
+            Assert.AreEqual(16, pack.Capacity);
+            Assert.AreEqual(8, pack.Size);
 
             pack.Dispose();
         }
@@ -83,12 +83,12 @@ namespace UnityNetTest.Packet
         {
             var pack = CreatePacket(5);
 
-            Assert.AreEqual(8, pack.ByteCapacity);
+            Assert.AreEqual(8, pack.Capacity);
             Assert.IsTrue(pack.Data != null);
 
             pack.Dispose();
 
-            Assert.AreEqual(0, pack.ByteCapacity);
+            Assert.AreEqual(0, pack.Capacity);
             Assert.IsTrue(pack.Data == null);
         }
     }

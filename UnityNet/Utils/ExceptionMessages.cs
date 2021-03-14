@@ -25,5 +25,10 @@ namespace UnityNet.Utils
         {
             throw new InvalidOperationException($"Maximum packet size of {TcpSocket.MAX_PACKET_SIZE} exceeded.");
         }
+
+        internal static void ThrowArgumentOutOfRange(string argumentName)
+        {
+            throw new ArgumentOutOfRangeException(argumentName);
+        }
     }
 }

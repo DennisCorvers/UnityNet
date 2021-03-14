@@ -19,7 +19,7 @@ namespace UnityNet.Serialization
         private int m_size;
 
         private int m_readPosition;
-        private bool m_isValid;
+        private bool m_isInvalidated;
         private SerializationMode m_mode;
 #pragma warning restore IDE0032
 
@@ -32,15 +32,13 @@ namespace UnityNet.Serialization
         /// </summary>
         public bool IsValid
         {
-            get => m_isValid;
+            get => !m_isInvalidated;
         }
         /// <summary>
-        /// Get the current reading position in the packet.
+        /// Gets the current <see cref="NetPacket"/> reading position in bits.
         /// </summary>
         public int ReadPosition
-        {
-            get => m_readPosition;
-        }
+            => m_readPosition;
         /// <summary>
         /// Returns <see langword="true"/> if the reading position has reached the end of the packet.
         /// </summary>
@@ -49,53 +47,71 @@ namespace UnityNet.Serialization
             get => m_readPosition >= m_size;
         }
         /// <summary>
-        /// The current size of the packet in bytes.
+        /// The current size of the <see cref="NetPacket"/> in bytes.
         /// </summary>
-        public int ByteSize
+        public int Size
             => (m_size + 7) >> 3;
         /// <summary>
-        /// The current capacity of the packet in bytes.
+        /// The current capacity of the <see cref="NetPacket"/> in bytes.
         /// </summary>
-        public int ByteCapacity
+        public int Capacity
             => m_capacity >> 3;
 
         /// <summary>
         /// The current streaming mode.
         /// </summary>
         public SerializationMode Mode
-            => m_mode;
+        {
+            get => m_mode;
+            set => m_mode = value;
+        }
         /// <summary>
-        /// Determines if the <see cref="BitStreamer"/> is writing.
+        /// Determines if the <see cref="NetPacket"/> is writing.
         /// </summary>
         public bool IsWriting
             => m_mode == SerializationMode.Writing;
         /// <summary>
-        /// Determines if the <see cref="BitStreamer"/> is reading.
+        /// Determines if the <see cref="NetPacket"/> is reading.
         /// </summary>
         public bool IsReading
             => m_mode == SerializationMode.Reading;
 
+        /// <summary>
+        /// Creates a <see cref="NetPacket"/> in Writing mode.
+        /// </summary>
+        /// <param name="initialSize">The initial size of the packet in bytes.</param>
+        public NetPacket(int initialSize)
+        {
+            if (initialSize < 0)
+                ExceptionHelper.ThrowArgumentOutOfRange("initialSize");
+
+            // Default all values.
+            m_data = default;
+            m_capacity = default;
+            m_size = default;
+            m_readPosition = default;
+            m_isInvalidated = default;
+            m_mode = default;
+            SendPosition = default;
+
+            ExpandSize(initialSize * 8);
+        }
 
         /// <summary>
-        /// Resets the Netpacket read offset.
+        /// Resets the <see cref="NetPacket"/> read offset.
         /// </summary>
         public void ResetRead()
         {
             m_mode = SerializationMode.Reading;
             m_readPosition = 0;
-            m_isValid = true;
+            m_isInvalidated = false;
         }
 
-        /// <summary>
-        /// Resets the Netpacket write offset. Existing data will be overwritten.
-        /// </summary>
-        public void ResetWrite()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetSerializationMode(SerializationMode mode)
         {
-            m_mode = SerializationMode.Writing;
-            m_size = 0;
-            m_isValid = true;
+            m_mode = mode;
         }
-
 
         /// <summary>
         /// Skips a certain number of bytes. Writes 0 bits when in write-mode.
@@ -139,6 +155,20 @@ namespace UnityNet.Serialization
             return;
         }
 
+        /// <summary>
+        /// Clears the packet and its data. Keeps the capacity.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Clear()
+        {
+            m_readPosition = 0;
+            m_size = 0;
+            m_isInvalidated = false;
+
+            // We only need to clear the bytes that have been used.
+            Memory.ZeroMem(m_data, Size);
+        }
+
 
         private ulong Read(int bits)
         {
@@ -170,7 +200,6 @@ namespace UnityNet.Serialization
             return 0;
         }
 
-
         private void Write(ulong value, int bits)
         {
             EnsureWriteSize(bits);
@@ -187,7 +216,6 @@ namespace UnityNet.Serialization
             InternalWrite(value, bits);
             m_size += bits;
         }
-
 
         /// <summary>
         /// Reads a value without increasing the offset.
@@ -221,9 +249,8 @@ namespace UnityNet.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void InternalWrite(ulong value, int bits)
         {
-            Debug.Assert(m_mode == SerializationMode.Writing);
-            Debug.Assert(bits > 0);
-            Debug.Assert(bits < 65);
+            Debug.Assert(bits >= 1);
+            Debug.Assert(bits <= 64);
 
             int longOffsetStart = m_size >> 6;
             int longOffsetEnd = (m_size + bits - 1) >> 6;
@@ -238,24 +265,21 @@ namespace UnityNet.Serialization
                 m_data[longOffsetEnd] = value >> (64 - placeOffset);
         }
 
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool EnsureReadSize(int bitCount)
         {
             Debug.Assert(bitCount >= 0);
-            Debug.Assert(m_mode == SerializationMode.Reading);
 
             if (m_readPosition + bitCount <= m_size)
-                return m_isValid = true;
+                return !(m_isInvalidated = false);
 
-            return m_isValid = false;
+            return !(m_isInvalidated = true);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureWriteSize(int bitCount)
         {
             Debug.Assert(bitCount >= 0);
-            Debug.Assert(m_mode == SerializationMode.Reading);
 
             // Casting to uint checks negative numbers.
             int newSize = m_size + bitCount;
@@ -266,35 +290,36 @@ namespace UnityNet.Serialization
 
         private void ExpandSize(int bufferBitSize)
         {
-            if (m_capacity < bufferBitSize)
+            int newByteSize = 0;
+            int oldByteSize = m_capacity >> 3;
+
+            // Allocate a new buffer.
+            if (m_data == null)
             {
-                int newByteSize = 0;
+                int newBitSize = Math.Max(DefaultSize * 8, bufferBitSize);
+                newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
 
-                // Allocate a new buffer.
-                if (m_data == null)
-                {
-                    int newBitSize = Math.Max(DefaultSize * 8, bufferBitSize);
-                    newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
-
-                    m_data = (ulong*)Memory.Alloc(newByteSize);
-                }
-                // Double the existing capacity.
-                else
-                {
-                    int newBitSize = Math.Max(m_capacity * 2, bufferBitSize);
-                    newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
-
-                    m_data = (ulong*)Memory.Realloc((IntPtr)m_data, m_capacity >> 3, newByteSize);
-                }
-
-                m_capacity = newByteSize * 8;
+                m_data = (ulong*)Memory.Alloc(newByteSize);
             }
+            // Double the existing capacity.
+            else
+            {
+                int newBitSize = Math.Max(m_capacity * 2, bufferBitSize);
+                newByteSize = MathUtils.GetNextMultipleOf8(newBitSize >> 3);
+
+                m_data = (ulong*)Memory.Realloc((IntPtr)m_data, oldByteSize, newByteSize);
+            }
+
+            // Zero any newly allocated memory
+            Memory.ZeroMem((byte*)m_data + oldByteSize, newByteSize - oldByteSize);
+
+            m_capacity = newByteSize * 8;
         }
 
         internal void OnReceive(void* data, int size)
         {
             // Clear packet first.
-            Clear();
+            Reset();
 
             if (m_capacity < size * 8)
             {
@@ -316,23 +341,22 @@ namespace UnityNet.Serialization
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Clear()
+        private void Reset()
         {
             m_size = 0;
             m_readPosition = 0;
             SendPosition = 0;
 
-            m_isValid = true;
+            m_isInvalidated = false;
             m_mode = default;
         }
-
 
         public void Dispose()
         {
             if (m_data != null)
                 Memory.Free(m_data);
 
-            Clear();
+            Reset();
             m_data = null;
             m_capacity = 0;
         }
