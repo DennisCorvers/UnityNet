@@ -35,7 +35,7 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_socket.LocalEndPoint == null)
+                if (m_socket == null || m_socket.LocalEndPoint == null)
                     return 0;
                 return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
             }
@@ -45,7 +45,7 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_socket.LocalEndPoint == null)
+                if (m_socket == null || m_socket.LocalEndPoint == null)
                     return IPAddress.None;
                 return ((IPEndPoint)m_socket.LocalEndPoint).Address;
             }
@@ -178,10 +178,10 @@ namespace UnityNet.Tcp
             {
                 m_socket.Listen(SOMAXCONN);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
                 Stop();
-                Logger.Error(ex);
+                Logger.Error(e);
                 return SocketStatus.Error;
             }
 

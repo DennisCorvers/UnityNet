@@ -166,12 +166,23 @@ namespace UnityNet.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
+            Clear(m_mode);
+        }
+
+        /// <summary>
+        /// Clears the packet and its data. Keeps the capacity.
+        /// </summary>
+        /// <param name="serializationMode">The serialization mode to set after clearing.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Clear(SerializationMode serializationMode)
+        {
             // We only need to clear the bytes that have been used.
             Memory.ZeroMem(m_data, MathUtils.GetNextMultipleOf8(Size));
 
             m_readPosition = 0;
             m_isInvalidated = false;
             m_size = 0;
+            m_mode = serializationMode;
         }
 
         /// <summary>
@@ -183,7 +194,7 @@ namespace UnityNet.Serialization
         /// The data stream for the Socket that returns <see cref="SocketStatus.Partial"/> will <br/>
         /// become corrupted once the <see cref="SendPosition"/> is reset.
         /// </summary>
-        internal void ResetSendPosition()
+        public void ResetSendPosition()
         {
             SendPosition = 0;
         }

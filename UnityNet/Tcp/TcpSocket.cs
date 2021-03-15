@@ -205,6 +205,7 @@ namespace UnityNet.Tcp
             socket.Blocking = false;
             socket.NoDelay = true;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, false);
+            socket.SendBufferSize = ushort.MaxValue;
 
             return socket;
         }
@@ -312,9 +313,9 @@ namespace UnityNet.Tcp
 
                     return SocketStatus.Disconnected;
                 }
-                catch (Exception ex)
+                catch (Exception e)
                 {
-                    Logger.Error(ex);
+                    Logger.Error(e);
                     return SocketStatus.Error;
                 }
             }
@@ -356,7 +357,7 @@ namespace UnityNet.Tcp
 
             var tcs = new TaskCompletionSource<SocketStatus>();
 
-            m_socket.BeginConnect(hostname, port, (asyncResult) =>
+            var t = m_socket.BeginConnect(hostname, port, (asyncResult) =>
             {
                 var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
 
@@ -629,12 +630,12 @@ namespace UnityNet.Tcp
                 m_socket.Connect(endpoint);
                 m_isActive = true;
             }
-            catch (SocketException ex)
+            catch (SocketException e)
             {
-                if (ex.ErrorCode == (int)SocketError.WouldBlock)
+                if (e.ErrorCode == (int)SocketError.WouldBlock)
                     return SocketStatus.NotReady;
 
-                Logger.Error(ex);
+                Logger.Error(e);
                 return SocketStatus.Error;
             }
 
