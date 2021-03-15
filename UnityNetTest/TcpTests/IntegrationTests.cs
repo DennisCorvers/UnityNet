@@ -1,4 +1,5 @@
 ﻿using NUnit.Framework;
+using System.Net;
 using System.Threading.Tasks;
 using UnityNet;
 using UnityNet.Serialization;
@@ -14,7 +15,7 @@ namespace UnityNetTest.TcpTests
         public async Task ConnectTest()
         {
             TcpListener listener = new TcpListener();
-            listener.Listen(PORT);
+            listener.Listen(IPAddress.Parse("127.0.0.1"), 666);
 
             TcpSocket clientSock = new TcpSocket();
             await clientSock.ConnectAsync("localhost", PORT);

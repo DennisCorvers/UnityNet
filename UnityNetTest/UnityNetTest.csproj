@@ -26,4 +26,8 @@
     <ProjectReference Include="..\UnityNet\UnityNet.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="UdpTests\" />
+  </ItemGroup>
+
 </Project>
