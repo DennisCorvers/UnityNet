@@ -39,6 +39,13 @@ namespace UnityNet.Serialization
             SendPosition = 0;
         }
 
+        internal unsafe RawPacket(ref NetPacket netPacket)
+        {
+            SendPosition = netPacket.SendPosition;
+            Size = netPacket.Size;
+            Data = (IntPtr)netPacket.Data;
+        }
+
         public void Dispose()
         {
             Memory.Free(Data);

@@ -180,5 +180,147 @@ namespace UnityNetTest.Packet
             Assert.AreEqual(0, packet.ReadLong());
             Assert.AreEqual(0, packet.ReadInt32());
         }
+
+        [TestCase(-1532)]
+        public void ReadwriteTest(int value)
+        {
+            var packet = new NetPacket();
+            packet.WriteInt32(value);
+            Assert.AreEqual(32, packet.WritePosition);
+
+            packet.ResetRead();
+            Assert.AreEqual(value, packet.ReadInt32());
+            Assert.AreEqual(32, packet.ReadPosition);
+
+            packet.Dispose();
+        }
+
+        [TestCase(-1532)]
+        public void ReadwriteFloat(float value)
+        {
+            var packet = new NetPacket();
+
+            int val = (int)value;
+            packet.WriteByte(0, 4);
+            packet.WriteInt32(val);
+
+            packet.ResetRead();
+            packet.ReadByte(4);
+            Assert.AreEqual(val, packet.ReadInt32());
+
+            packet.Dispose();
+        }
+
+        [Test]
+        public void ReadWriteMultipleTest()
+        {
+            var packet = new NetPacket();
+
+            const bool bVal = true;
+            const double dVal = double.MaxValue / 3 * 2;
+            const float fVal = float.MinValue / 5;
+            const short sVal = -12345;
+            const int offset = 113;
+
+            packet.WriteBool(bVal);
+            packet.WriteDouble(dVal);
+            packet.WriteFloat(fVal);
+            packet.WriteShort(sVal);
+            Assert.AreEqual(offset, packet.WritePosition);
+
+            packet.ResetRead();
+            Assert.AreEqual(bVal, packet.ReadBool());
+            Assert.AreEqual(dVal, packet.ReadDouble());
+            Assert.AreEqual(fVal, packet.ReadFloat());
+            Assert.AreEqual(sVal, packet.ReadShort());
+            Assert.AreEqual(offset, packet.ReadPosition);
+
+            packet.Dispose();
+        }
+        [Test]
+        public void ReadWriteSizeTest()
+        {
+            var packet = new NetPacket();
+
+            const byte bVal = 100;
+            const int iVal = -100;
+            const byte bitSize = 7;
+
+            packet.WriteByte(bVal, bitSize);
+            packet.WriteInt32(iVal, bitSize + 1);
+            Assert.AreEqual(bitSize * 2 + 1, packet.WritePosition);
+
+            packet.ResetRead();
+            Assert.AreEqual(bVal, packet.ReadByte(bitSize));
+            Assert.AreEqual(iVal, packet.ReadInt32(bitSize + 1));
+            Assert.AreEqual(bitSize * 2 + 1, packet.ReadPosition);
+
+            packet.Dispose();
+        }
+
+        [TestCase(-29183742)]
+        public void SerializeReadTest(int value)
+        {
+            var packet = new NetPacket();
+
+            packet.WriteInt32(value);
+            packet.ResetRead();
+
+            int ret = 0;
+            packet.Serialize(ref ret);
+            Assert.AreEqual(ret, value);
+            Assert.AreEqual(4, packet.Size);
+
+            packet.Dispose();
+        }
+
+        [TestCase(-976)]
+        public void SerializeWriteTest(int value)
+        {
+            var packet = new NetPacket();
+
+            packet.Serialize(ref value);
+            Assert.AreEqual(4, packet.Size);
+
+            packet.ResetRead();
+            Assert.AreEqual(value, packet.ReadInt32());
+
+            packet.Dispose();
+        }
+
+        [TestCase(-1.6234f)]
+        public void SerializeTest(float value)
+        {
+            var packet = new NetPacket();
+
+            packet.Serialize(ref value);
+            Assert.AreEqual(32, packet.WritePosition);
+
+            packet.ResetRead();
+            float ret = 0;
+            packet.Serialize(ref ret);
+            Assert.AreEqual(value, ret);
+            Assert.AreEqual(32, packet.ReadPosition);
+
+            packet.Dispose();
+        }
+
+        [Test]
+        public void ReadWriteIntTest()
+        {
+            var packet = new NetPacket();
+
+            int val = 123456789;
+
+            packet.WriteInt32(val);
+
+            Assert.AreEqual(4, packet.Size);
+
+            packet.ResetRead();
+
+            Assert.AreEqual(val, packet.ReadInt32());
+
+            packet.Dispose();
+        }
     }
 }

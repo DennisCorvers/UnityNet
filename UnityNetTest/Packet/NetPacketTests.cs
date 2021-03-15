@@ -19,12 +19,6 @@ namespace UnityNetTest.Packet
         }
 
         [Test]
-        public void ClearTest()
-        {
-
-        }
-
-        [Test]
         public void OnReceiveEmptyTest()
         {
             var pack = CreatePacket(7);

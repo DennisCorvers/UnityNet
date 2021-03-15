@@ -1,13 +1,16 @@
 ﻿using System.Runtime.CompilerServices;
-using UnityEngine;
 using UnityNet.Compression;
 using UnityNet.Utils;
+#if UNITY
+using UnityEngine;
+#endif
 
 namespace UnityNet.Serialization
 {
+#if UNITY
     public unsafe partial struct NetPacket
     {
-        #region Float-Based Read      
+    #region Float-Based Read      
         public Vector2 ReadVector2()
         {
             return new Vector2(ReadFloat(), ReadFloat());
@@ -102,9 +105,9 @@ namespace UnityNet.Serialization
         {
             return new Quaternion(ReadHalf(), ReadHalf(), ReadHalf(), ReadHalf());
         }
-        #endregion
+    #endregion
 
-        #region Int-Based Read
+    #region Int-Based Read
         public Vector2Int ReadVector2Int(int bitCount = 32)
         {
             if (!EnsureReadSize(bitCount * 2))
@@ -150,9 +153,9 @@ namespace UnityNet.Serialization
                 ReadIntUnchecked(min, numBits),
                 ReadIntUnchecked(min, numBits));
         }
-        #endregion
+    #endregion
 
-        #region Float-Based Write
+    #region Float-Based Write
         public void WriteVector2(Vector2 value)
         {
             WriteFloat(value.x);
@@ -259,9 +262,9 @@ namespace UnityNet.Serialization
             WriteHalf(value.z);
             WriteHalf(value.w);
         }
-        #endregion
+    #endregion
 
-        #region Int-Based Write
+    #region Int-Based Write
         public void WriteVector2Int(Vector2Int value, int bitCount = 32)
         {
             EnsureWriteSize(bitCount * 2);
@@ -299,7 +302,7 @@ namespace UnityNet.Serialization
             WriteIntUnchecked(value.y, min, numBits);
             WriteIntUnchecked(value.z, min, numBits);
         }
-        #endregion
+    #endregion
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Serialize(ref Vector2 value)
@@ -434,7 +437,7 @@ namespace UnityNet.Serialization
             else value = ReadVector3Int(min, max);
         }
 
-        #region Unchecked Operations
+    #region Unchecked Operations
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private float ReadFloatUnchecked(float min, float precision, int bits)
         {
@@ -470,6 +473,7 @@ namespace UnityNet.Serialization
         {
             WriteUnchecked((ulong)(value - min), bits);
         }
-        #endregion
+    #endregion
     }
+#endif
 }

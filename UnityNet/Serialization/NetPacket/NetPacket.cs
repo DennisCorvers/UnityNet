@@ -40,6 +40,11 @@ namespace UnityNet.Serialization
         public int ReadPosition
             => m_readPosition;
         /// <summary>
+        /// Gets the current <see cref="NetPacket"/> write position in bits.
+        /// </summary>
+        public int WritePosition
+            => m_size;
+        /// <summary>
         /// Returns <see langword="true"/> if the reading position has reached the end of the packet.
         /// </summary>
         public bool EndOfPacket
@@ -161,14 +166,27 @@ namespace UnityNet.Serialization
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear()
         {
-            m_readPosition = 0;
-            m_size = 0;
-            m_isInvalidated = false;
-
             // We only need to clear the bytes that have been used.
-            Memory.ZeroMem(m_data, Size);
+            Memory.ZeroMem(m_data, MathUtils.GetNextMultipleOf8(Size));
+
+            m_readPosition = 0;
+            m_isInvalidated = false;
+            m_size = 0;
         }
 
+        /// <summary>
+        /// Resets the Send Position of this <see cref="NetPacket"/>.
+        /// <para>
+        /// This should only be used when a <see cref="NetPacket"/> is sent to multiple <br/>
+        /// Sockets where one or more returns <see cref="SocketStatus.Partial"/>.
+        /// </para>
+        /// The data stream for the Socket that returns <see cref="SocketStatus.Partial"/> will <br/>
+        /// become corrupted once the <see cref="SendPosition"/> is reset.
+        /// </summary>
+        internal void ResetSendPosition()
+        {
+            SendPosition = 0;
+        }
 
         private ulong Read(int bits)
         {
