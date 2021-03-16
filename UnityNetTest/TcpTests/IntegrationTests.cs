@@ -15,7 +15,7 @@ namespace UnityNetTest.TcpTests
         public async Task ConnectTest()
         {
             TcpListener listener = new TcpListener();
-            listener.Listen(IPAddress.Parse("127.0.0.1"), 666);
+            listener.Listen(666);
 
             TcpSocket clientSock = new TcpSocket();
             await clientSock.ConnectAsync("localhost", PORT);

@@ -153,11 +153,10 @@ namespace UnityNet.Tcp
         {
             ThrowIfDisposed();
 
+            ThrowIfActive();
+
             if (hostname == null)
                 throw new ArgumentNullException(nameof(hostname));
-
-            if (m_isActive)
-                throw new InvalidOperationException("Socket is already connected.");
 
             IPAddress[] addresses = null;
             try
@@ -188,11 +187,10 @@ namespace UnityNet.Tcp
         {
             ThrowIfDisposed();
 
-            if (endpoint == null)
-                throw new ArgumentNullException("endpoint");
+            ThrowIfActive();
 
-            if (m_isActive)
-                throw new InvalidOperationException("Socket is already connected.");
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
 
             if (timeout <= 0)
             {
@@ -256,6 +254,8 @@ namespace UnityNet.Tcp
             if (m_isClearedUp)
                 throw new ObjectDisposedException(GetType().FullName);
 
+            ThrowIfActive();
+
             var tcs = new TaskCompletionSource<SocketStatus>();
 
             var t = m_socket.BeginConnect(hostname, port, (asyncResult) =>
@@ -300,6 +300,8 @@ namespace UnityNet.Tcp
 
             if (m_isClearedUp)
                 throw new ObjectDisposedException(GetType().FullName);
+
+            ThrowIfActive();
 
             var tcs = new TaskCompletionSource<SocketStatus>();
 
@@ -708,7 +710,6 @@ namespace UnityNet.Tcp
         /// <summary>
         /// Disposes the TCP Connection.
         /// </summary>
-        /// <param name="reuseSocket">TRUE to create a new underlying socket. Resets all previously set socket options.</param>
         public void Close()
         {
             if (m_isActive)
@@ -871,6 +872,12 @@ namespace UnityNet.Tcp
                 ThrowObjectDisposedException();
 
             void ThrowObjectDisposedException() => throw new ObjectDisposedException(GetType().FullName);
+        }
+
+        private void ThrowIfActive()
+        {
+            if (m_isActive)
+                ExceptionHelper.ThrowAlreadyActive();
         }
 
         private void ValidateAddressFamily(AddressFamily family)

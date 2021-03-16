@@ -18,7 +18,7 @@ namespace UnityNet.Utils
 
         internal static void ThrowAlreadyBound()
         {
-            throw new InvalidOperationException("TcpListener is already bound. Call Close() first.");
+            throw new InvalidOperationException("Socket is already bound. Call Close() first.");
         }
 
         internal static void ThrowPacketSizeExceeded()
@@ -29,6 +29,11 @@ namespace UnityNet.Utils
         internal static void ThrowArgumentOutOfRange(string argumentName)
         {
             throw new ArgumentOutOfRangeException(argumentName);
+        }
+
+        internal static void ThrowAlreadyActive()
+        {
+            throw new InvalidOperationException("Socket is already connected.");
         }
     }
 }
