@@ -30,8 +30,7 @@ namespace UnityNet
 
         public IPAddress ToIPAddress()
         {
-            long m_Address = ((_octet4 << 24 | _octet3 << 16 | _octet2 << 8 | _octet1) & 0x0FFFFFFFF);
-            return new IPAddress(m_Address);
+            return ParseIP(_octet4, _octet3, _octet2, _octet1);
         }
 
         public static IPAddress ParseIP(byte _1, byte _2, byte _3, byte _4)
@@ -40,6 +39,10 @@ namespace UnityNet
             return new IPAddress(m_Address);
         }
 
+        public static IPEndPoint ParseIPEndpoint(byte _1, byte _2, byte _3, byte _4, ushort port)
+        {
+            return new IPEndPoint(ParseIP(_1, _2, _3, _4), port);
+        }
 
         public bool Equals(UNetIp other)
         {

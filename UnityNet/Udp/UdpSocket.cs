@@ -177,29 +177,31 @@ namespace UnityNet.Udp
             m_socket.Bind(localEP);
         }
 
-
         /// <summary>
         /// Sends data over the <see cref="UdpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="size">The size of the payload.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(IntPtr data, int size, out int bytesSent)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(IntPtr data, int size, out int bytesSent, IPEndPoint remoteEP = null)
         {
             if (data == IntPtr.Zero)
                 ExceptionHelper.ThrowNoData();
 
             bytesSent = 0;
-            return InnerSend((void*)data, size, ref bytesSent);
+            return InnerSend((void*)data, size, ref bytesSent, remoteEP);
         }
 
         /// <summary>
         /// Sends data over the <see cref="UdpSocket"/>.
         /// </summary>
         /// <param name="data">The payload to send.</param>
-        public SocketStatus Send(byte[] data)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(byte[] data, IPEndPoint remoteEP = null)
         {
-            return Send(data, data.Length, 0, out _);
+            if (data == null) ExceptionHelper.ThrowNoData();
+            return InnerSend(data, data.Length, 0, out _, remoteEP);
         }
 
         /// <summary>
@@ -207,9 +209,11 @@ namespace UnityNet.Udp
         /// </summary>
         /// <param name="data">The payload to send.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(byte[] data, out int bytesSent)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(byte[] data, out int bytesSent, IPEndPoint remoteEP = null)
         {
-            return Send(data, data.Length, 0, out bytesSent);
+            if (data == null) ExceptionHelper.ThrowNoData();
+            return InnerSend(data, data.Length, 0, out bytesSent, remoteEP);
         }
 
         /// <summary>
@@ -218,9 +222,16 @@ namespace UnityNet.Udp
         /// <param name="data">The payload to send.</param>
         /// <param name="length">The amount of data to send.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(byte[] data, int length, out int bytesSent)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(byte[] data, int length, out int bytesSent, IPEndPoint remoteEP = null)
         {
-            return Send(data, length, 0, out bytesSent);
+            if (data == null)
+                ExceptionHelper.ThrowNoData();
+
+            if ((uint)length > data.Length)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
+
+            return InnerSend(data, length, 0, out bytesSent, remoteEP);
         }
 
         /// <summary>
@@ -230,33 +241,42 @@ namespace UnityNet.Udp
         /// <param name="length">The amount of data to sent.</param>
         /// <param name="offset">The offset at which to start sending.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent, IPEndPoint remoteEP = null)
         {
-            return InnerSend(data, length, offset, out bytesSent);
+            if (data == null)
+                ExceptionHelper.ThrowNoData();
+
+            if ((uint)(length - offset) > data.Length)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
+
+            return InnerSend(data, length, offset, out bytesSent, remoteEP);
         }
 
         /// <summary>
         /// Sends a <see cref="RawPacket"/> over the <see cref="UdpSocket"/>.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
-        public SocketStatus Send(ref RawPacket packet)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(ref RawPacket packet, IPEndPoint remoteEP = null)
         {
             if (packet.Data == IntPtr.Zero)
                 ExceptionHelper.ThrowNoData();
 
-            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition);
+            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition, remoteEP);
         }
 
         /// <summary>
         /// Sends a <see cref="NetPacket"/> over the <see cref="UdpSocket"/>.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
-        public SocketStatus Send(ref NetPacket packet)
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send(ref NetPacket packet, IPEndPoint remoteEP = null)
         {
             if (packet.Data == null)
                 ExceptionHelper.ThrowNoData();
 
-            return InnerSend(packet.Data, packet.Size, ref packet.SendPosition);
+            return InnerSend(packet.Data, packet.Size, ref packet.SendPosition, remoteEP);
         }
 
 
