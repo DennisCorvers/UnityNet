@@ -11,9 +11,9 @@ namespace UnityNet.Tcp
     public unsafe sealed class TcpSocket : IDisposable
     {
         // 1380 is a conservative MTU size.
-        internal const int BUFFER_SIZE = 1380;
-        internal const int MAX_PACKET_SIZE = ushort.MaxValue;
-        private const int HEADER_SIZE = sizeof(ushort);
+        internal const int DefaultBufferSize = 1380;
+        internal const int MaxPacketSize = ushort.MaxValue;
+        private const int HeaderSize = sizeof(ushort);
 
 #pragma warning disable IDE0032, IDE0044
         private Socket m_socket;
@@ -66,7 +66,7 @@ namespace UnityNet.Tcp
         {
             ValidateAddressFamily(family);
 
-            m_buffer = new byte[BUFFER_SIZE];
+            m_buffer = new byte[DefaultBufferSize];
             m_family = family;
 
             InitializeClientSocket();
@@ -90,8 +90,8 @@ namespace UnityNet.Tcp
             if (buffer == null)
                 throw new ArgumentNullException("buffer");
 
-            if (buffer.Length < BUFFER_SIZE)
-                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {BUFFER_SIZE}.");
+            if (buffer.Length < DefaultBufferSize)
+                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {DefaultBufferSize}.");
 
             ValidateAddressFamily(family);
 
@@ -107,7 +107,7 @@ namespace UnityNet.Tcp
         /// Creates its own internal buffer.
         /// </summary>
         internal TcpSocket(Socket socket)
-            : this(socket, new byte[BUFFER_SIZE])
+            : this(socket, new byte[DefaultBufferSize])
         { }
 
         /// <summary>
@@ -348,7 +348,7 @@ namespace UnityNet.Tcp
 
             if (data == IntPtr.Zero || size == 0)
             {
-                Logger.Error(ExceptionHelper.NO_DATA);
+                ExceptionHelper.ThrowNoData();
                 return SocketStatus.Error;
             }
 
@@ -356,7 +356,7 @@ namespace UnityNet.Tcp
             for (; bytesSent < size; bytesSent += result)
             {
                 // Copy unmanaged data to managed buffer.
-                int toSend = Math.Min(BUFFER_SIZE, size - bytesSent);
+                int toSend = Math.Min(DefaultBufferSize, size - bytesSent);
                 Memory.MemCpy((byte*)data + bytesSent, m_buffer, 0, toSend);
 
                 // Send managed buffer.
@@ -410,6 +410,12 @@ namespace UnityNet.Tcp
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
         public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent)
         {
+            if (data == null)
+                ExceptionHelper.ThrowNoData();
+
+            if ((uint)(length - offset) > data.Length)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
+
             return InnerSend(data, length, offset, out bytesSent);
         }
 
@@ -419,6 +425,12 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref RawPacket packet)
         {
+            if (packet.Size > MaxPacketSize)
+                ExceptionHelper.ThrowPacketSizeExceeded();
+
+            if (packet.Data == IntPtr.Zero)
+                ExceptionHelper.ThrowNoData();
+
             return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition);
         }
 
@@ -428,6 +440,12 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref NetPacket packet)
         {
+            if (packet.Size > MaxPacketSize)
+                ExceptionHelper.ThrowPacketSizeExceeded();
+
+            if (packet.Data == null)
+                ExceptionHelper.ThrowNoData();
+
             return InnerSend(packet.Data, packet.Size, ref packet.SendPosition);
         }
 
@@ -444,7 +462,7 @@ namespace UnityNet.Tcp
 
             if (data == null)
             {
-                Logger.Error(ExceptionHelper.INVALID_BUFFER);
+                ExceptionHelper.ThrowNoData();
                 return SocketStatus.Error;
             }
 
@@ -480,6 +498,12 @@ namespace UnityNet.Tcp
         /// <param name="receivedBytes">The amount of copied to the buffer.</param>
         public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
         {
+            if (data == null)
+                ExceptionHelper.ThrowNoData();
+
+            if ((uint)(size - offset) > data.Length)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
+
             return InnerReceive(data, size, offset, out receivedBytes);
         }
 
@@ -556,14 +580,14 @@ namespace UnityNet.Tcp
             PendingPacket pendingPacket = m_pendingPacket;
 
             int received = 0;
-            if (pendingPacket.SizeReceived < HEADER_SIZE)
+            if (pendingPacket.SizeReceived < HeaderSize)
             {
                 // Receive packet size.
-                while (pendingPacket.SizeReceived < HEADER_SIZE)
+                while (pendingPacket.SizeReceived < HeaderSize)
                 {
                     byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
 
-                    var status = InnerReceive(data, HEADER_SIZE - pendingPacket.SizeReceived, out received);
+                    var status = InnerReceive(data, HeaderSize - pendingPacket.SizeReceived, out received);
                     pendingPacket.SizeReceived += received;
 
                     if (status != SocketStatus.Done)
@@ -577,11 +601,11 @@ namespace UnityNet.Tcp
             }
 
             // Receive packet data.
-            int dataReceived = pendingPacket.SizeReceived - HEADER_SIZE;
+            int dataReceived = pendingPacket.SizeReceived - HeaderSize;
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
-                int amountToReceive = Math.Min(BUFFER_SIZE, pendingPacket.Size - dataReceived);
+                int amountToReceive = Math.Min(DefaultBufferSize, pendingPacket.Size - dataReceived);
                 var status = InnerReceive(m_buffer, amountToReceive, 0, out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
@@ -608,7 +632,7 @@ namespace UnityNet.Tcp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SocketStatus InnerReceive(void* data, int size, out int receivedBytes)
         {
-            int maxBytes = Math.Min(size, BUFFER_SIZE);
+            int maxBytes = Math.Min(size, DefaultBufferSize);
             receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
 
             if (receivedBytes > 0)
@@ -662,32 +686,29 @@ namespace UnityNet.Tcp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SocketStatus InnerSend(void* data, int packetSize, ref int sendPosition)
         {
-            if (packetSize > MAX_PACKET_SIZE)
-                ExceptionHelper.ThrowPacketSizeExceeded();
-
             // Send packet header (and remaining data that fits within the buffer)
-            if (sendPosition < HEADER_SIZE)
+            if (sendPosition < HeaderSize)
             {
                 byte* sendPosPtr = (byte*)&packetSize + sendPosition;
-                int sizeToCopy = Math.Min(BUFFER_SIZE - HEADER_SIZE, packetSize);
+                int sizeToCopy = Math.Min(DefaultBufferSize - HeaderSize, packetSize);
 
                 fixed (byte* bufPtr = &m_buffer[sendPosition])
                 {
-                    Memory.MemCpy(sendPosPtr, bufPtr, HEADER_SIZE - sendPosition);
+                    Memory.MemCpy(sendPosPtr, bufPtr, HeaderSize - sendPosition);
                     Memory.MemCpy(data, bufPtr + 2, sizeToCopy);
                 }
 
-                var status = InnerSend(m_buffer, sizeToCopy + HEADER_SIZE, 0, out sendPosition);
+                var status = InnerSend(m_buffer, sizeToCopy + HeaderSize, 0, out sendPosition);
 
                 if (status != SocketStatus.Done)
                     return status;
             }
 
             // Send packet body.
-            int dataOffset = sendPosition - HEADER_SIZE;
+            int dataOffset = sendPosition - HeaderSize;
             while (dataOffset < packetSize)
             {
-                int toSend = Math.Min(BUFFER_SIZE, packetSize - dataOffset);
+                int toSend = Math.Min(DefaultBufferSize, packetSize - dataOffset);
                 Memory.MemCpy((byte*)data + dataOffset, m_buffer, 0, toSend);
 
                 var status = InnerSend(m_buffer, toSend, 0, out int bytesSent);
@@ -695,7 +716,7 @@ namespace UnityNet.Tcp
 
                 if (status != SocketStatus.Done)
                 {
-                    sendPosition = dataOffset + HEADER_SIZE;
+                    sendPosition = dataOffset + HeaderSize;
                     return status;
                 }
             }

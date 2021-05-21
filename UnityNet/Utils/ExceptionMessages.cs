@@ -23,7 +23,7 @@ namespace UnityNet.Utils
 
         internal static void ThrowPacketSizeExceeded()
         {
-            throw new InvalidOperationException($"Maximum packet size of {TcpSocket.MAX_PACKET_SIZE} exceeded.");
+            throw new InvalidOperationException($"Maximum packet size of {TcpSocket.MaxPacketSize} exceeded.");
         }
 
         internal static void ThrowArgumentOutOfRange(string argumentName)
@@ -34,6 +34,11 @@ namespace UnityNet.Utils
         internal static void ThrowAlreadyActive()
         {
             throw new InvalidOperationException("Socket is already connected.");
+        }
+
+        internal static void ThrowNoData()
+        {
+            throw new InvalidOperationException(NO_DATA);
         }
     }
 }

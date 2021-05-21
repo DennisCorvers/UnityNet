@@ -73,7 +73,7 @@ namespace UnityNet.Tcp
             m_shareBuffer = shareBuffer;
 
             if (shareBuffer)
-                m_sharedBuffer = new byte[TcpSocket.BUFFER_SIZE];
+                m_sharedBuffer = new byte[TcpSocket.DefaultBufferSize];
         }
 
         ~TcpListener()
