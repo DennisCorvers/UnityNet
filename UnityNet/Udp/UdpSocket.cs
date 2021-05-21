@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using UnityNet.Serialization;
 using UnityNet.Utils;
 
 namespace UnityNet.Udp
@@ -16,17 +18,12 @@ namespace UnityNet.Udp
         private Socket m_socket;
         private bool m_isActive;
         private readonly byte[] m_buffer;
-        private AddressFamily m_addressFamily = AddressFamily.InterNetwork;
+        private AddressFamily m_family = AddressFamily.InterNetwork;
 
         private bool m_isCleanedUp;
         private bool m_hasSharedBuffer;
 #pragma warning restore IDE0032, IDE0044
 
-        /// <summary>
-        /// Indicates whether the underlying socket is connected.
-        /// </summary>
-        public bool Connected
-            => m_socket.Connected;
         /// <summary>
         /// Returns false if the <see cref="UdpSocket"/> is not using an internal buffer.
         /// </summary>
@@ -42,7 +39,7 @@ namespace UnityNet.Udp
         {
             ValidateAddressFamily(family);
 
-            m_addressFamily = family;
+            m_family = family;
             m_buffer = new byte[MaxDatagramSize];
 
             CreateNewSocketIfNeeded();
@@ -63,7 +60,7 @@ namespace UnityNet.Udp
             if (buffer.Length < MaxDatagramSize)
                 throw new ArgumentOutOfRangeException(nameof(buffer), $"Buffer needs to have a size of at least {MaxDatagramSize}");
 
-            m_addressFamily = family;
+            m_family = family;
             m_buffer = buffer;
             m_hasSharedBuffer = true;
 
@@ -105,7 +102,24 @@ namespace UnityNet.Udp
             if (hostname == null)
                 throw new ArgumentNullException(nameof(hostname));
 
-            throw new NotImplementedException();
+            IPAddress[] addresses = null;
+            try
+            {
+                addresses = Dns.GetHostAddresses(hostname);
+            }
+            catch (SocketException)
+            {
+                Logger.Error("Unable to resolve hostname " + hostname);
+                return SocketStatus.Error;
+            }
+
+            foreach (var address in addresses)
+            {
+                if (address.AddressFamily == m_family || m_family == AddressFamily.Unknown)
+                    return Connect(new IPEndPoint(address, port));
+            }
+
+            return SocketStatus.Error;
         }
 
         /// <summary>
@@ -121,7 +135,13 @@ namespace UnityNet.Udp
             if (endpoint == null)
                 throw new ArgumentNullException(nameof(endpoint));
 
-            throw new NotImplementedException();
+            if (endpoint.Address.Equals(IPAddress.Broadcast))
+                m_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, 1);
+
+            m_socket.Connect(endpoint);
+            m_isActive = true;
+
+            return SocketStatus.Done;
         }
 
         /// <summary>
@@ -132,7 +152,7 @@ namespace UnityNet.Udp
         {
             IPEndPoint tempEP;
 
-            if (m_addressFamily == AddressFamily.InterNetwork)
+            if (m_family == AddressFamily.InterNetwork)
                 tempEP = new IPEndPoint(IPAddress.Any, port);
             else
                 tempEP = new IPEndPoint(IPAddress.IPv6Any, port);
@@ -148,13 +168,236 @@ namespace UnityNet.Udp
             if (localEP == null)
                 throw new ArgumentNullException(nameof(localEP));
 
-            if (localEP.AddressFamily != m_addressFamily)
+            if (localEP.AddressFamily != m_family)
                 throw new ArgumentException("localEP AddressFamily is not compatible with Sockets AddressFamily.");
 
             if (m_socket.IsBound)
                 ExceptionHelper.ThrowAlreadyBound();
 
             m_socket.Bind(localEP);
+        }
+
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="size">The size of the payload.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(IntPtr data, int size, out int bytesSent)
+        {
+            if (data == IntPtr.Zero)
+                ExceptionHelper.ThrowNoData();
+
+            bytesSent = 0;
+            return InnerSend((void*)data, size, ref bytesSent);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        public SocketStatus Send(byte[] data)
+        {
+            return Send(data, data.Length, 0, out _);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, out int bytesSent)
+        {
+            return Send(data, data.Length, 0, out bytesSent);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="length">The amount of data to send.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, int length, out int bytesSent)
+        {
+            return Send(data, length, 0, out bytesSent);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The payload to send.</param>
+        /// <param name="length">The amount of data to sent.</param>
+        /// <param name="offset">The offset at which to start sending.</param>
+        /// <param name="bytesSent">The amount of bytes that have been sent.</param>
+        public SocketStatus Send(byte[] data, int length, int offset, out int bytesSent)
+        {
+            return InnerSend(data, length, offset, out bytesSent);
+        }
+
+        /// <summary>
+        /// Sends a <see cref="RawPacket"/> over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="packet">The packet to send.</param>
+        public SocketStatus Send(ref RawPacket packet)
+        {
+            if (packet.Data == IntPtr.Zero)
+                ExceptionHelper.ThrowNoData();
+
+            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition);
+        }
+
+        /// <summary>
+        /// Sends a <see cref="NetPacket"/> over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="packet">The packet to send.</param>
+        public SocketStatus Send(ref NetPacket packet)
+        {
+            if (packet.Data == null)
+                ExceptionHelper.ThrowNoData();
+
+            return InnerSend(packet.Data, packet.Size, ref packet.SendPosition);
+        }
+
+
+        /// <summary>
+        /// Receives raw data from the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="size">The size of the buffer.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(IntPtr data, int size, out int receivedBytes, ref IPEndPoint remoteEP)
+        {
+            receivedBytes = 0;
+
+            if (data == null)
+            {
+                ExceptionHelper.ThrowNoData();
+                return SocketStatus.Error;
+            }
+
+            return InnerReceive((void*)data, size, out receivedBytes, ref remoteEP);
+        }
+
+        /// <summary>
+        /// Receives raw data from the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(byte[] data, out int receivedBytes, ref IPEndPoint remoteEP)
+        {
+            return Receive(data, data.Length, 0, out receivedBytes, ref remoteEP);
+        }
+
+        /// <summary>
+        /// Receives raw data from the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="data">The buffer where the received data is copied to.</param>
+        /// <param name="size">The amount of bytes to copy.</param>
+        /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes, ref IPEndPoint remoteEP)
+        {
+            if (data == null)
+                ExceptionHelper.ThrowArgumentNull(nameof(data));
+
+            if ((uint)(size - offset) > data.Length)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
+
+            return InnerReceive(data, size, offset, out receivedBytes, ref remoteEP);
+        }
+
+        /// <summary>
+        /// Copies received data into the supplied NetPacket.
+        /// Must be disposed after use.
+        /// </summary>
+        /// <param name="packet">Packet to copy the data into.</param>
+        public SocketStatus Receive(ref NetPacket packet, ref IPEndPoint remoteEP)
+        {
+            InnerReceive(m_buffer, MaxDatagramSize, 0, out int receivedBytes, ref remoteEP);
+
+            if (receivedBytes > 0)
+            {
+                fixed (byte* buf = m_buffer)
+                {
+                    packet.OnReceive(buf, receivedBytes);
+                }
+            }
+
+            return SocketStatus.Done;
+        }
+
+        /// <summary>
+        /// Receives a <see cref="RawPacket"/> from the <see cref="UdpSocket"/>.
+        /// Must be disposed after use.
+        /// </summary>
+        /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
+        public SocketStatus Receive(out RawPacket packet, ref IPEndPoint remoteEP)
+        {
+            InnerReceive(m_buffer, MaxDatagramSize, 0, out int receivedBytes, ref remoteEP);
+
+            if (receivedBytes == 0)
+            {
+                packet = default;
+            }
+            else
+            {
+                IntPtr packetDat = Memory.Alloc(receivedBytes);
+                Memory.MemCpy(m_buffer, 0, (void*)packetDat, receivedBytes);
+
+                packet = new RawPacket(packetDat, receivedBytes);
+            }
+
+            return SocketStatus.Done;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(void* data, int size, out int receivedBytes, ref IPEndPoint remoteEP)
+        {
+            InnerReceive(m_buffer, size, 0, out receivedBytes, ref remoteEP);
+            Memory.MemCpy(m_buffer, 0, data, size);
+
+            return SocketStatus.Done;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes, ref IPEndPoint remoteEP)
+        {
+            EndPoint endpoint;
+
+            if (m_family == AddressFamily.InterNetwork)
+                endpoint = IpEndpointStatics.Any;
+            else
+                endpoint = IpEndpointStatics.IPv6Any;
+
+            receivedBytes = m_socket.ReceiveFrom(data, offset, size, SocketFlags.None, ref endpoint);
+            remoteEP = (IPEndPoint)endpoint;
+
+            return SocketStatus.Done;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerSend(byte[] data, int length, int offset, out int bytesSent, IPEndPoint endpoint = null)
+        {
+            if (m_isActive && endpoint != null)
+                ExceptionHelper.ThrowAlreadyActive();
+
+            if (endpoint == null)
+                bytesSent = m_socket.Send(data, offset, length, SocketFlags.None);
+            else
+                bytesSent = m_socket.SendTo(data, offset, length, SocketFlags.None, endpoint);
+
+            return SocketStatus.Done;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private SocketStatus InnerSend(void* data, int packetSize, ref int bytesSent, IPEndPoint endpoint = null)
+        {
+            if ((uint)packetSize > MaxDatagramSize)
+                ExceptionHelper.ThrowPacketSizeExceeded();
+
+            // Copy memory to managed buffer.
+            Memory.MemCpy(data, m_buffer, 0, packetSize);
+            return InnerSend(m_buffer, packetSize, 0, out bytesSent, endpoint);
         }
 
         /// <summary>
@@ -267,7 +510,7 @@ namespace UnityNet.Udp
             if (m_socket != null)
                 return;
 
-            m_socket = new Socket(m_addressFamily, SocketType.Dgram, ProtocolType.Udp)
+            m_socket = new Socket(m_family, SocketType.Dgram, ProtocolType.Udp)
             {
                 Blocking = false,
                 SendBufferSize = ushort.MaxValue,

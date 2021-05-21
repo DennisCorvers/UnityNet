@@ -40,5 +40,10 @@ namespace UnityNet.Utils
         {
             throw new InvalidOperationException(NO_DATA);
         }
+
+        internal static void ThrowArgumentNull(string argumentName)
+        {
+            throw new ArgumentNullException(argumentName);
+        }
     }
 }

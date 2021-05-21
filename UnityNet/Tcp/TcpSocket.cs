@@ -425,9 +425,6 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref RawPacket packet)
         {
-            if (packet.Size > MaxPacketSize)
-                ExceptionHelper.ThrowPacketSizeExceeded();
-
             if (packet.Data == IntPtr.Zero)
                 ExceptionHelper.ThrowNoData();
 
@@ -440,9 +437,6 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(ref NetPacket packet)
         {
-            if (packet.Size > MaxPacketSize)
-                ExceptionHelper.ThrowPacketSizeExceeded();
-
             if (packet.Data == null)
                 ExceptionHelper.ThrowNoData();
 
@@ -462,7 +456,7 @@ namespace UnityNet.Tcp
 
             if (data == null)
             {
-                ExceptionHelper.ThrowNoData();
+                ExceptionHelper.ThrowArgumentNull(nameof(data));
                 return SocketStatus.Error;
             }
 
@@ -499,7 +493,7 @@ namespace UnityNet.Tcp
         public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
         {
             if (data == null)
-                ExceptionHelper.ThrowNoData();
+                ExceptionHelper.ThrowArgumentNull(nameof(data));
 
             if ((uint)(size - offset) > data.Length)
                 ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
