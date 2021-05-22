@@ -21,6 +21,8 @@ Below shows an example of the UdpSocket. The API is loosely based on .Net's UdpC
     byte[] buffer = new byte[128];
     // ## Receiving
     server.Receive(buffer, out _, ref ip);
+    
+    packet.Dispose(); // NetPackets should be disposed before they go out of scope. They should be re-used when possible.
 ```
 
 Connection for Udp is optional but makes it so that Send operations always send to the same endpoint.
