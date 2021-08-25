@@ -1,6 +1,5 @@
 # UnityNet
-UnityNet aims for out-of-the-box TCP connectivity without garbage generation during messaging. The API is loosely based on the built-in TcpListener and TcpClient.
-UnityNet uses the built-in Socket class, making it compatible with various compilation targets.
+UnityNet aims for out-of-the-box TCP connectivity without garbage generation during messaging. UnityNet uses the built-in Socket class, making it compatible with various compilation targets.
 
 **Please read the USAGE section carefuly before using UnityNet.**
 
@@ -11,7 +10,7 @@ UnityNet uses two different types of packets. Both NetPacket and RawPacket are b
 **Disposed should be called on both types when they are no longer needed**. It is adviced to create and dispose packets in the same location, as to not cause memory leaks.
 
 UnityNet offers the following:
-- TcpListener and TcpClient to establish client-server communication.
+- TcpListener and TcpSocket to establish client-server communication.
 - Packet reassembly.
 - NetPacket with build-in serialization and bound checking.
 - NetPacket with various compression algorithms and string encodings.
@@ -38,10 +37,10 @@ if (status != SocketStatus.Done)
 }
 ```
 
-All function calls of the TcpClient are non-blocking by default, with the exception of Connect with a timeout of greater than 0.
+All function calls of the TcpSocket are non-blocking by default, with the exception of Connect with a timeout of greater than 0.
 
 The server side first requires an active TcpListener to accept the incoming client connection.
-This connection can then be accepted and returned as a TcpClient.
+This connection can then be accepted and returned as a TcpSocket.
 
 ```C#
 TcpListener listener = new TcpListener();
@@ -60,7 +59,7 @@ After the connection has been accepted, messages can be sent to, and read from t
 
 ### Sending and receiving data
 
-The TcpClient offers many different Send and Receive methods. They support pointers to memory as well as byte arrays.
+The TcpSocket offers many different Send and Receive methods. They support pointers to memory as well as byte arrays.
 Lastly, they also support sending and receiving of NetPackets.
 
 Below is an example of sending a NetPacket over the socket.
