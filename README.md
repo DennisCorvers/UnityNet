@@ -2,7 +2,7 @@
 UnityNet aims for out-of-the-box TCP connectivity without garbage generation during messaging. The API is loosely based on the built-in TcpListener and TcpClient.
 UnityNet uses the built-in Socket class, making it compatible with various compilation targets.
 
-Please read the USAGE section carefuly before using UnityNet.
+**Please read the USAGE section carefuly before using UnityNet.**
 
 Scroll below to find examples.
 
