@@ -383,18 +383,6 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Sends a <see cref="RawPacket"/> over the TcpSocket.
-        /// </summary>
-        /// <param name="packet">The packet to send.</param>
-        public SocketStatus Send(ref RawPacket packet)
-        {
-            if (packet.Data == IntPtr.Zero)
-                ExceptionHelper.ThrowNoData();
-
-            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition);
-        }
-
-        /// <summary>
         /// Sends a <see cref="NetPacket"/> over the TcpSocket.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
@@ -488,12 +476,15 @@ namespace UnityNet.Tcp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        public SocketStatus Receive(out RawPacket packet)
+        public SocketStatus Receive(ref RawPacket packet)
         {
+            if (packet.Data != IntPtr.Zero)
+                ThrowNonEmptyBuffer();
+
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                packet = new RawPacket((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+                packet.ReceiveInto((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
 
                 // Reset Pending packet completely, as we've passed on its internal buffer.
                 // PendingPacket.Resize will allocate a new buffer.
@@ -505,6 +496,9 @@ namespace UnityNet.Tcp
                 packet = default;
             }
             return status;
+
+            void ThrowNonEmptyBuffer() 
+                => throw new InvalidOperationException("Packet must be empty.");
         }
 
 

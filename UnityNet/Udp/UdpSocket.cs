@@ -262,19 +262,6 @@ namespace UnityNet.Udp
         }
 
         /// <summary>
-        /// Sends a <see cref="RawPacket"/> over the <see cref="UdpSocket"/>.
-        /// </summary>
-        /// <param name="packet">The packet to send.</param>
-        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
-        public SocketStatus Send(ref RawPacket packet, IPEndPoint remoteEP = null)
-        {
-            if (packet.Data == IntPtr.Zero)
-                ExceptionHelper.ThrowNoData();
-
-            return InnerSend((void*)packet.Data, packet.Size, ref packet.SendPosition, remoteEP);
-        }
-
-        /// <summary>
         /// Sends a <see cref="NetPacket"/> over the <see cref="UdpSocket"/>.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
@@ -359,8 +346,11 @@ namespace UnityNet.Udp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        public SocketStatus Receive(out RawPacket packet, ref IPEndPoint remoteEP)
+        public SocketStatus Receive(ref RawPacket packet, ref IPEndPoint remoteEP)
         {
+            if (packet.Data != IntPtr.Zero)
+                ThrowNonEmptyBuffer();
+
             InnerReceive(m_buffer, MaxDatagramSize, 0, out int receivedBytes, ref remoteEP);
 
             if (receivedBytes == 0)
@@ -372,10 +362,13 @@ namespace UnityNet.Udp
                 IntPtr packetDat = Memory.Alloc(receivedBytes);
                 Memory.MemCpy(m_buffer, 0, (void*)packetDat, receivedBytes);
 
-                packet = new RawPacket(packetDat, receivedBytes);
+                packet.ReceiveInto(packetDat, receivedBytes);
             }
 
             return SocketStatus.Done;
+
+            void ThrowNonEmptyBuffer() 
+                => throw new InvalidOperationException("Packet must be empty.");
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -11,9 +11,10 @@ namespace UnityNet.Serialization
     public struct RawPacket : IDisposable
     {
         /// <summary>
-        /// Used for keeping track of partial packet sends.
+        /// Gets a value that indicates if the RawPacket has unmanaged memory allocated and Dispose should be called.
         /// </summary>
-        internal int SendPosition;
+        public bool IsAllocated
+            => Data != IntPtr.Zero;
 
         /// <summary>
         /// The total size of Data in bytes.
@@ -21,7 +22,7 @@ namespace UnityNet.Serialization
         public int Size
         {
             get;
-            internal set;
+            private set;
         }
         /// <summary>
         /// The data contained in this packet.
@@ -29,14 +30,13 @@ namespace UnityNet.Serialization
         public IntPtr Data
         {
             get;
-            internal set;
+            private set;
         }
 
-        public RawPacket(IntPtr data, int sizeInBytes)
+        internal void ReceiveInto(IntPtr data, int dataSize)
         {
-            Size = sizeInBytes;
             Data = data;
-            SendPosition = 0;
+            Size = dataSize;
         }
 
         public void Dispose()
