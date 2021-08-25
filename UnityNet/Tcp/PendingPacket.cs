@@ -8,25 +8,28 @@ namespace UnityNet.Tcp
     {
         internal int Capacity
         { get; private set; }
-        internal int Size;
-        internal int SizeReceived;
         internal byte* Data
         { get; private set; }
+
+        internal int Size;
+        internal int SizeReceived;
 
         internal void Resize(int newSize)
         {
             if (newSize > Capacity)
             {
+                var alignedSize = MathUtils.GetNextMultipleOf8(newSize);
+
                 if (Data == null)
                 {
-                    Data = (byte*)Memory.Alloc(newSize);
+                    Data = (byte*)Memory.Alloc(alignedSize);
                 }
                 else
                 {
-                    Data = (byte*)Memory.Realloc((IntPtr)Data, Size, newSize);
+                    Data = (byte*)Memory.Realloc((IntPtr)Data, Capacity, alignedSize);
                 }
 
-                Capacity = newSize;
+                Capacity = alignedSize;
             }
         }
 
@@ -38,9 +41,10 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Free()
+        internal void Dispose()
         {
-            Memory.Free(Data);
+            if (Data != null)
+                Memory.Free(Data);
 
             Data = null;
             Capacity = 0;

@@ -22,12 +22,6 @@ namespace UnityNetTest.TcpTests
         [Test]
         public void ConstructorFaultTest()
         {
-            Assert.Catch<ArgumentNullException>(() =>
-            { TcpSocket sock = new TcpSocket(buffer: null); });
-
-            Assert.Catch(() =>
-            { TcpSocket sock = new TcpSocket(new byte[1000]); });
-
             Assert.Catch(() =>
             { TcpSocket sock = new TcpSocket(System.Net.Sockets.AddressFamily.AppleTalk); });
         }

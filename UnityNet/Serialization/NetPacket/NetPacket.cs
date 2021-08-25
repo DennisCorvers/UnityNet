@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
+using UnityNet.Tcp;
 using UnityNet.Utils;
 
 namespace UnityNet.Serialization
@@ -88,7 +89,7 @@ namespace UnityNet.Serialization
         public NetPacket(int initialSize)
         {
             if (initialSize < 0)
-                ExceptionHelper.ThrowArgumentOutOfRange("initialSize");
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(initialSize));
 
             // Default all values.
             m_data = default;
@@ -111,6 +112,12 @@ namespace UnityNet.Serialization
             m_readPosition = 0;
             m_isInvalidated = false;
         }
+
+        /// <summary>
+        /// Resets the NetPacket for writing.
+        /// </summary>
+        public void ResetWrite()
+            => Clear(SerializationMode.Writing);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetSerializationMode(SerializationMode mode)
@@ -361,10 +368,25 @@ namespace UnityNet.Serialization
                 // Allocate the expanded one. We don't need to preserve old data.
                 m_data = (ulong*)Memory.Alloc(alignedSize);
                 m_capacity = alignedSize * 8;
+                // Free rest bytes
+                Memory.ZeroMem(((byte*)m_data) + size, alignedSize - size);
             }
 
             m_size = size * 8;
             Memory.MemCpy(data, m_data, size);
+            m_mode = SerializationMode.Reading;
+        }
+
+        internal void OnReceive(ref PendingPacket packet)
+        {
+            // Free any existing buffer.
+            Dispose();
+
+            Memory.ZeroMem(packet.Data + packet.Size, packet.Capacity - packet.Size);
+
+            m_data = (ulong*)packet.Data;
+            m_size = packet.Size * 8;
+            m_capacity = packet.Capacity * 8;
 
             m_mode = SerializationMode.Reading;
         }
@@ -385,9 +407,10 @@ namespace UnityNet.Serialization
             if (m_data != null)
                 Memory.Free(m_data);
 
-            Reset();
             m_data = null;
             m_capacity = 0;
+
+            Reset();
         }
     }
 }

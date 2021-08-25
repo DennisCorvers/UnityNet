@@ -1,4 +1,5 @@
 ﻿using NUnit.Framework;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 using UnityNet;
@@ -91,6 +92,79 @@ namespace UnityNetTest.TcpTests
             serverSock.Dispose();
             packet.Dispose();
             clientPacket.Dispose();
+        }
+
+        [Test]
+        public void RejectHugePacket()
+        {
+            TcpListener listener = new TcpListener
+            {
+                MaximumPacketSize = 1024
+            };
+
+            listener.Listen(PORT);
+            TcpSocket clientSock = new TcpSocket();
+            var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
+
+            var status = listener.Accept(out TcpSocket serverSock);
+            Assert.AreEqual(SocketStatus.Done, status);
+
+            var largePacket = new NetPacket();
+            largePacket.WriteBytes(new byte[8192], true);
+
+            while (clientSock.Send(ref largePacket) != SocketStatus.Done) ;
+
+            Assert.AreEqual(SocketStatus.Disconnected, serverSock.Receive(ref largePacket));
+
+            Assert.IsFalse(serverSock.Connected);
+
+            listener.Dispose();
+            clientSock.Dispose();
+            serverSock.Dispose();
+            largePacket.Dispose();
+        }
+
+        // [Test]
+        public void StressTest()
+        {
+            TcpListener listener = new TcpListener();
+            listener.Listen(PORT);
+
+            TcpSocket clientSock = new TcpSocket();
+            var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
+
+            var status = listener.Accept(out TcpSocket serverSock);
+
+
+
+            for (int i = 0; i < 1000000; i++)
+            {
+                NetPacket packet = new NetPacket();
+
+                var messageTo = Guid.NewGuid().ToString();
+                packet.WriteString(messageTo);
+                while (serverSock.Send(ref packet) != SocketStatus.Done) ;
+
+                packet.Clear();
+
+                while (clientSock.Receive(ref packet) != SocketStatus.Done) ;
+
+                Assert.AreEqual(messageTo, packet.ReadString());
+                packet.ResetWrite();
+
+                packet.WriteString($"Message with code {messageTo} received.");
+                while (clientSock.Send(ref packet) != SocketStatus.Done) ;
+
+                packet.Clear();
+
+                while (serverSock.Receive(ref packet) != SocketStatus.Done) ;
+
+                packet.Dispose();
+            }
+
+            listener.Dispose();
+            clientSock.Dispose();
+            serverSock.Dispose();
         }
     }
 }

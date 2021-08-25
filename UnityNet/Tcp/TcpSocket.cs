@@ -10,10 +10,8 @@ namespace UnityNet.Tcp
 {
     public unsafe sealed class TcpSocket : IDisposable
     {
-        // 1380 is a conservative MTU size.
-        internal const int DefaultBufferSize = 1380;
-        internal const int MaxPacketSize = ushort.MaxValue;
-        private const int HeaderSize = sizeof(ushort);
+        private const int BufferSize = 1024;
+        private const int HeaderSize = sizeof(int);
 
 #pragma warning disable IDE0032, IDE0044
         private Socket m_socket;
@@ -24,7 +22,7 @@ namespace UnityNet.Tcp
         private bool m_isActive;
         private bool m_isClearedUp;
 
-        private bool m_hasSharedBuffer;
+        private int m_maxPacketSize = int.MaxValue;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
@@ -33,10 +31,13 @@ namespace UnityNet.Tcp
         public bool Connected
             => m_socket.Connected;
         /// <summary>
-        /// Returns false if the <see cref="TcpSocket"/> is not using an internal buffer.
+        /// Gets or sets a value that indicates whether the <see cref="TcpSocket"/> is in blocking mode.
         /// </summary>
-        public bool HasSharedBuffer
-            => m_hasSharedBuffer;
+        public bool Blocking
+        {
+            get => m_socket.Blocking;
+            set => m_socket.Blocking = value;
+        }
 
         private bool ExclusiveAddressUse
         {
@@ -66,38 +67,8 @@ namespace UnityNet.Tcp
         {
             ValidateAddressFamily(family);
 
-            m_buffer = new byte[DefaultBufferSize];
+            m_buffer = new byte[BufferSize];
             m_family = family;
-
-            InitializeClientSocket();
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with a user-defined buffer.
-        /// </summary>
-        /// <param name="buffer">The Send/Receive buffer.</param>
-        public TcpSocket(byte[] buffer)
-            : this(buffer, AddressFamily.Unknown)
-        { }
-
-        /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with a user-defined buffer.
-        /// </summary>
-        /// <param name="buffer">The Send/Receive buffer.</param>
-        /// <param name="family">The AddressFamily of the IP.</param>
-        public TcpSocket(byte[] buffer, AddressFamily family)
-        {
-            if (buffer == null)
-                throw new ArgumentNullException("buffer");
-
-            if (buffer.Length < DefaultBufferSize)
-                throw new ArgumentOutOfRangeException(nameof(buffer), buffer.Length, $"Buffer needs to have a size of at least {DefaultBufferSize}.");
-
-            ValidateAddressFamily(family);
-
-            m_buffer = buffer;
-            m_family = family;
-            m_hasSharedBuffer = true;
 
             InitializeClientSocket();
         }
@@ -106,20 +77,12 @@ namespace UnityNet.Tcp
         /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
         /// Creates its own internal buffer.
         /// </summary>
-        internal TcpSocket(Socket socket)
-            : this(socket, new byte[DefaultBufferSize])
-        { }
-
-        /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
-        /// Uses a shared buffer.
-        /// </summary>
-        internal TcpSocket(Socket socket, byte[] buffer)
+        internal TcpSocket(Socket socket, int maxPacketSize)
         {
             m_isActive = true;
-            m_hasSharedBuffer = true;
             m_socket = ConfigureSocket(socket);
-            m_buffer = buffer;
+            m_buffer = new byte[BufferSize];
+            m_maxPacketSize = maxPacketSize;
         }
 
         /// <summary>
@@ -356,7 +319,7 @@ namespace UnityNet.Tcp
             for (; bytesSent < size; bytesSent += result)
             {
                 // Copy unmanaged data to managed buffer.
-                int toSend = Math.Min(DefaultBufferSize, size - bytesSent);
+                int toSend = Math.Min(BufferSize, size - bytesSent);
                 Memory.MemCpy((byte*)data + bytesSent, m_buffer, 0, toSend);
 
                 // Send managed buffer.
@@ -511,10 +474,10 @@ namespace UnityNet.Tcp
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                packet.OnReceive(m_pendingPacket.Data, m_pendingPacket.Size);
+                packet.OnReceive(ref m_pendingPacket);
 
-                // Reset the PendingPacket, but keep the internal buffer since we only made a copy.
-                m_pendingPacket.Clear();
+                // PendingPacket buffer is completely passed to NetPacket. 
+                m_pendingPacket = new PendingPacket();
             }
 
             return status;
@@ -591,7 +554,13 @@ namespace UnityNet.Tcp
                     }
                 }
 
-                pendingPacket.Resize(pendingPacket.Size);
+                // If the received packet size exceeds the maximum allowed packet size, reject the client connection.
+                // This prevents clients from abusively sending huge packets and consuming a lot of server memory.
+                if (pendingPacket.Size > m_maxPacketSize)
+                {
+                    m_socket.Close();
+                    return SocketStatus.Disconnected;
+                }
             }
 
             // Receive packet data.
@@ -599,12 +568,13 @@ namespace UnityNet.Tcp
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
-                int amountToReceive = Math.Min(DefaultBufferSize, pendingPacket.Size - dataReceived);
+                int amountToReceive = Math.Min(BufferSize, pendingPacket.Size - dataReceived);
                 var status = InnerReceive(m_buffer, amountToReceive, 0, out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
                 if (received > 0)
                 {
+                    pendingPacket.Resize(dataReceived + received);
                     Memory.MemCpy(m_buffer, 0, pendingPacket.Data + dataReceived, received);
                     dataReceived += received;
                 }
@@ -626,7 +596,7 @@ namespace UnityNet.Tcp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SocketStatus InnerReceive(void* data, int size, out int receivedBytes)
         {
-            int maxBytes = Math.Min(size, DefaultBufferSize);
+            int maxBytes = Math.Min(size, BufferSize);
             receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
 
             if (receivedBytes > 0)
@@ -684,12 +654,12 @@ namespace UnityNet.Tcp
             if (sendPosition < HeaderSize)
             {
                 byte* sendPosPtr = (byte*)&packetSize + sendPosition;
-                int sizeToCopy = Math.Min(DefaultBufferSize - HeaderSize, packetSize);
+                int sizeToCopy = Math.Min(BufferSize - HeaderSize, packetSize);
 
                 fixed (byte* bufPtr = &m_buffer[sendPosition])
                 {
                     Memory.MemCpy(sendPosPtr, bufPtr, HeaderSize - sendPosition);
-                    Memory.MemCpy(data, bufPtr + 2, sizeToCopy);
+                    Memory.MemCpy(data, bufPtr + HeaderSize, sizeToCopy);
                 }
 
                 var status = InnerSend(m_buffer, sizeToCopy + HeaderSize, 0, out sendPosition);
@@ -702,7 +672,7 @@ namespace UnityNet.Tcp
             int dataOffset = sendPosition - HeaderSize;
             while (dataOffset < packetSize)
             {
-                int toSend = Math.Min(DefaultBufferSize, packetSize - dataOffset);
+                int toSend = Math.Min(BufferSize, packetSize - dataOffset);
                 Memory.MemCpy((byte*)data + dataOffset, m_buffer, 0, toSend);
 
                 var status = InnerSend(m_buffer, toSend, 0, out int bytesSent);
@@ -755,8 +725,7 @@ namespace UnityNet.Tcp
                 GC.SuppressFinalize(this);
             }
 
-            if (m_pendingPacket.Data != null)
-                m_pendingPacket.Free();
+            m_pendingPacket.Dispose();
 
             m_isClearedUp = true;
             m_isActive = false;

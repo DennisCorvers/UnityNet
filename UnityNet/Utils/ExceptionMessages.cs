@@ -23,7 +23,7 @@ namespace UnityNet.Utils
 
         internal static void ThrowPacketSizeExceeded()
         {
-            throw new InvalidOperationException($"Maximum packet size of {TcpSocket.MaxPacketSize} exceeded.");
+            throw new InvalidOperationException($"Maximum UDP packet size of {Udp.UdpSocket.MaxDatagramSize} exceeded.");
         }
 
         internal static void ThrowArgumentOutOfRange(string argumentName)

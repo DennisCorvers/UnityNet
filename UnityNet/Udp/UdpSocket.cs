@@ -29,6 +29,14 @@ namespace UnityNet.Udp
         /// </summary>
         public bool HasSharedBuffer
             => m_hasSharedBuffer;
+        /// <summary>
+        /// Gets or sets a value that indicates whether the <see cref="UdpSocket"/> is in blocking mode.
+        /// </summary>
+        public bool Blocking
+        {
+            get => m_socket.Blocking;
+            set => m_socket.Blocking = value;
+        }
 
 
         /// <summary>

@@ -10,17 +10,26 @@ namespace UnityNet.Tcp
         public const int SOMAXCONN = ushort.MaxValue;
 
 #pragma warning disable IDE0032, IDE0044
-        private byte[] m_sharedBuffer = null;
         private Socket m_socket;
 
+        private int m_maxPacketSize = int.MaxValue;
         private bool m_isActive;
         private bool m_exclusiveAddressUse;
 
         private bool? m_allowNatTraversal;
 
         private bool m_isDisposed;
-        private bool m_shareBuffer;
 #pragma warning restore IDE0032, IDE0044
+
+        /// <summary>
+        /// Defines the maximum packet size the client is allowed to send to this listener.
+        /// Client gets disconnected if the packet size exceeds this value.
+        /// </summary>
+        public int MaximumPacketSize
+        {
+            get => m_maxPacketSize;
+            set => m_maxPacketSize = value < 1 ? throw new ArgumentOutOfRangeException(nameof(value), "MaximumPacketSize must be at least 1.") : value;
+        }
 
         /// <summary>
         /// Indicates if the listener is listening on a port.
@@ -40,6 +49,14 @@ namespace UnityNet.Tcp
                 return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
             }
         }
+        /// <summary>
+        /// Gets or sets a value that indicates whether the <see cref="TcpListener"/> is in blocking mode.
+        /// </summary>
+        public bool Blocking
+        {
+            get => m_socket.Blocking;
+            set => m_socket.Blocking = value;
+        }
 
         public IPAddress BoundAddress
         {
@@ -50,30 +67,13 @@ namespace UnityNet.Tcp
                 return ((IPEndPoint)m_socket.LocalEndPoint).Address;
             }
         }
-        /// <summary>
-        /// Indicates if the listener shares a buffer among the connected TcpSockets
-        /// </summary>
-        public bool IsSharingBuffer
-            => m_shareBuffer;
 
         /// <summary>
         /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         public TcpListener()
-            : this(true)
-        { }
-
-        /// <summary>
-        /// Creates a <see cref="TcpListener"/>.
-        /// </summary>
-        /// <param name="shareBuffer">If TRUE, all accepted TCPSockets will share the same buffer.</param>
-        public TcpListener(bool shareBuffer)
         {
             m_socket = CreateListener();
-            m_shareBuffer = shareBuffer;
-
-            if (shareBuffer)
-                m_sharedBuffer = new byte[TcpSocket.DefaultBufferSize];
         }
 
         ~TcpListener()
@@ -231,11 +231,7 @@ namespace UnityNet.Tcp
             }
 
             var acceptedSocket = m_socket.Accept();
-
-            if (m_shareBuffer)
-                socket = new TcpSocket(acceptedSocket, m_sharedBuffer);
-            else
-                socket = new TcpSocket(acceptedSocket);
+            socket = new TcpSocket(acceptedSocket, m_maxPacketSize);
 
             return SocketStatus.Done;
         }
