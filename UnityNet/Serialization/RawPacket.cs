@@ -39,15 +39,6 @@ namespace UnityNet.Serialization
             SendPosition = 0;
         }
 
-        internal unsafe RawPacket(byte[] data, int size)
-        {
-            Data = Memory.Alloc(size);
-            Size = size;
-            SendPosition = 0;
-
-            Memory.MemCpy(data, 0, (void*)Data, size);
-        }
-
         public void Dispose()
         {
             Memory.Free(Data);
