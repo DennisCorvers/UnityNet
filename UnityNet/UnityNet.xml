@@ -1,0 +1,796 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>UnityNet</name>
+    </assembly>
+    <members>
+        <member name="F:UnityNet.Serialization.BitEncoding.ASCII">
+            <summary>
+            1-byte ASCII encoding.
+            </summary>
+        </member>
+        <member name="F:UnityNet.Serialization.BitEncoding.UTF16">
+            <summary>
+            2-byte UTF16 (Default C#) encoding.
+            </summary>
+        </member>
+        <member name="F:UnityNet.Serialization.BitEncoding.ASCIICompressed">
+            <summary>
+            7-bit ASCII encoding.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.IsValid">
+            <summary>
+            Returns <see langword="true"/> if the previosu Read operation was successful.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.ReadPosition">
+            <summary>
+            Gets the current <see cref="T:UnityNet.Serialization.NetPacket"/> reading position in bits.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.WritePosition">
+            <summary>
+            Gets the current <see cref="T:UnityNet.Serialization.NetPacket"/> write position in bits.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.EndOfPacket">
+            <summary>
+            Returns <see langword="true"/> if the reading position has reached the end of the packet.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.Size">
+            <summary>
+            The current size of the <see cref="T:UnityNet.Serialization.NetPacket"/> in bytes.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.Capacity">
+            <summary>
+            The current capacity of the <see cref="T:UnityNet.Serialization.NetPacket"/> in bytes.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.Mode">
+            <summary>
+            The current streaming mode.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.IsWriting">
+            <summary>
+            Determines if the <see cref="T:UnityNet.Serialization.NetPacket"/> is writing.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.NetPacket.IsReading">
+            <summary>
+            Determines if the <see cref="T:UnityNet.Serialization.NetPacket"/> is reading.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.#ctor(System.Int32)">
+            <summary>
+            Creates a <see cref="T:UnityNet.Serialization.NetPacket"/> in Writing mode.
+            </summary>
+            <param name="initialSize">The initial size of the packet in bytes.</param>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ResetRead">
+            <summary>
+            Resets the <see cref="T:UnityNet.Serialization.NetPacket"/> read offset.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ResetWrite">
+            <summary>
+            Resets the NetPacket for writing.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.Skip(System.Byte)">
+            <summary>
+            Skips a certain number of bytes. Writes 0 bits when in write-mode.
+            </summary>
+            <param name="bitCount">Amount of bits to skip</param>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.Skip(System.Int32)">
+            <summary>
+            Skips a certain number of bits. Writes 0 bits when in write-mode.
+            </summary>
+            <param name="bitCount">Amount of bits to skip</param>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.Clear">
+            <summary>
+            Clears the packet and its data. Keeps the capacity.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.Clear(UnityNet.Serialization.SerializationMode)">
+            <summary>
+            Clears the packet and its data. Keeps the capacity.
+            </summary>
+            <param name="serializationMode">The serialization mode to set after clearing.</param>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ResetSendPosition">
+            <summary>
+            Resets the Send Position of this <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            <para>
+            This should only be used when a <see cref="T:UnityNet.Serialization.NetPacket"/> is sent to multiple <br/>
+            Sockets where one or more returns <see cref="F:UnityNet.SocketStatus.Partial"/>.
+            </para>
+            The data stream for the Socket that returns <see cref="F:UnityNet.SocketStatus.Partial"/> will <br/>
+            become corrupted once the <see cref="F:UnityNet.Serialization.NetPacket.SendPosition"/> is reset.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadUnchecked(System.Int32)">
+            <summary>
+            Reads a value without ensuring the buffer size.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteUnchecked(System.UInt64,System.Int32)">
+            <summary>
+            Writes a value without ensuring the buffer size.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.InternalPeek(System.Int32)">
+            <summary>
+            Reads a value without increasing the offset.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.InternalWrite(System.UInt64,System.Int32)">
+            <summary>
+            Writes a value without increasing the offset.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteMemory(System.IntPtr,System.Int32)">
+            <summary>
+            Writes raw data to the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteMemory(System.Void*,System.Int32)">
+            <summary>
+            Writes raw data to the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadMemory(System.IntPtr,System.Int32)">
+            <summary>
+            Reads raw data from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadMemory(System.Void*,System.Int32)">
+            <summary>
+            Reads raw data from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteBytes(System.Byte[],System.Int32,System.Int32,System.Boolean)">
+            <summary>
+            Writes bytes to the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadBytes">
+            <summary>
+            Reads an array of bytes from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            Length is automatically retrieved as an uint16.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadBytes(System.Int32)">
+            <summary>
+            Reads an array of bytes from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+            <param name="count">The amount of bytes to read.</param>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadBytes(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Reads bytes from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteString(System.String,System.Text.Encoding)">
+            <summary>
+            Writes a string to the <see cref="T:UnityNet.Serialization.NetPacket"/>. 
+            Includes the bytesize as an uint16.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadString(System.Text.Encoding)">
+            <summary>
+            Reads a string from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteString(System.String,UnityNet.Serialization.BitEncoding)">
+            <summary>
+            Writes a string to the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteString(System.Char[],UnityNet.Serialization.BitEncoding)">
+            <summary>
+            Writes a string to the <see cref="T:UnityNet.Serialization.NetPacket"/>. 
+            Includes the bytesize as an uint16.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.WriteString(System.Char*,System.Int32,UnityNet.Serialization.BitEncoding)">
+            <summary>
+            Writes a string to the <see cref="T:UnityNet.Serialization.NetPacket"/>. 
+            Includes the bytesize as an uint16.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadString(System.Char[],UnityNet.Serialization.BitEncoding)">
+            <summary>
+            Reads a string from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Serialization.NetPacket.ReadString(System.Char*,System.Int32,UnityNet.Serialization.BitEncoding)">
+            <summary>
+            Reads a string from the <see cref="T:UnityNet.Serialization.NetPacket"/>.
+            Reads a maximum of charLength or the original string length.
+            </summary>
+        </member>
+        <member name="T:UnityNet.Serialization.RawPacket">
+            <summary>
+            A struct that contains a netpacket with its length.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.RawPacket.IsAllocated">
+            <summary>
+            Gets a value that indicates if the RawPacket has unmanaged memory allocated and Dispose should be called.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.RawPacket.Size">
+            <summary>
+            The total size of Data in bytes.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Serialization.RawPacket.Data">
+            <summary>
+            The data contained in this packet.
+            </summary>
+        </member>
+        <member name="T:UnityNet.Serialization.SerializationMode">
+            <summary>
+            Describes a SerializationMode. Default is <see cref="F:UnityNet.Serialization.SerializationMode.Writing"/>
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.Done">
+            <summary>
+            The socket has sent / received the data.
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.NotReady">
+            <summary>
+            The socket is not ready to send / receive data yet.
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.Partial">
+            <summary>
+            The socket sent a part of the data.
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.Disconnected">
+            <summary>
+            The TCP socket has been disconnected.
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.Error">
+            <summary>
+            An unexpected error happened.
+            </summary>
+        </member>
+        <member name="F:UnityNet.SocketStatus.TimedOut">
+            <summary>
+            The blocking call timed-out.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpListener.MaximumPacketSize">
+            <summary>
+            Defines the maximum packet size the client is allowed to send to this listener.
+            Client gets disconnected if the packet size exceeds this value.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpListener.IsActive">
+            <summary>
+            Indicates if the listener is listening on a port.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpListener.LocalPort">
+            <summary>
+            Get the port to which the socket is bound locally.
+            If the socket is not listening to a port, this property returns 0.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpListener.Blocking">
+            <summary>
+            Gets or sets a value that indicates whether the <see cref="T:UnityNet.Tcp.TcpListener"/> is in blocking mode.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.#ctor">
+            <summary>
+            Creates a <see cref="T:UnityNet.Tcp.TcpListener"/>.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Listen(System.UInt16)">
+             <summary>
+             Start listening for incoming connection attempts
+            
+             This function makes the socket start listening on the
+             specified port, waiting for incoming connection attempts.
+             </summary>
+             <param name="port">Port to listen on for incoming connection attempts</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Listen(System.Net.IPAddress,System.UInt16)">
+             <summary>
+             Start listening for incoming connection attempts
+            
+             This function makes the socket start listening on the
+             specified port, waiting for incoming connection attempts.
+             </summary>
+             <param name="port">Port to listen on for incoming connection attempts</param>
+             <param name="address">Address of the interface to listen on</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Listen(System.Net.IPEndPoint)">
+             <summary>
+             Start listening for incoming connection attempts
+            
+             This function makes the socket start listening on the
+             specified port, waiting for incoming connection attempts.
+             </summary>
+             <param name="iPEndPoint">Endpoint of the interface to listen on</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.ConnectionPending(System.Int32)">
+            <summary>
+            Determines if there are pending connection requests.
+            </summary>
+            <param name="microSeconds">The timeout in microseconds.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Accept(UnityNet.Tcp.TcpSocket@)">
+            <summary>
+            Accept a new connection
+            </summary>
+            <param name="socket">Socket that will hold the new connection</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Accept(UnityNet.Tcp.TcpSocket@,System.Int32)">
+            <summary>
+            Accept a new connection.
+            </summary>
+            <param name="socket">Socket that will hold the new connection</param>
+            <param name="microSeconds">The time in microseconds that this function blocks until a connection is available.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Stop">
+            <summary>
+            Closes the network connection.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpListener.Dispose">
+            <summary>
+            Disposes the TcpListener.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.Connected">
+            <summary>
+            Indicates whether the underlying socket is connected.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.Blocking">
+            <summary>
+            Gets or sets a value that indicates whether the <see cref="T:UnityNet.Tcp.TcpSocket"/> is in blocking mode.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.#ctor">
+            <summary>
+            Creates a new <see cref="T:UnityNet.Tcp.TcpSocket"/> with an internal buffer.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.#ctor(System.Net.Sockets.AddressFamily)">
+            <summary>
+            Creates a new <see cref="T:UnityNet.Tcp.TcpSocket"/> with an internal buffer.
+            </summary>
+            <param name="family">The AddressFamily of the IP.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.#ctor(System.Net.Sockets.Socket,System.Int32)">
+            <summary>
+            Creates a new <see cref="T:UnityNet.Tcp.TcpSocket"/> from an accepted Socket.
+            Creates its own internal buffer.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Connect(UnityNet.UNetIp,System.UInt16,System.Int32)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+            <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Connect(System.Net.IPAddress,System.UInt16,System.Int32)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+            <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Connect(System.String,System.UInt16,System.Int32)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="hostname">The hostname of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Connect(System.Net.IPEndPoint,System.Int32)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="endpoint">The endpoint of the remote host.</param>
+            <param name="timeout">The timeout in seconds to wait for a connection.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.ConnectAsync(UnityNet.UNetIp,System.UInt16)">
+            <summary>
+            Starts connecting to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.ConnectAsync(System.Net.IPAddress,System.UInt16)">
+            <summary>
+            Starts connecting to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.ConnectAsync(System.String,System.UInt16)">
+            <summary>
+            Starts connecting to the remote host.
+            </summary>
+            <param name="hostname">The hostname of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.ConnectAsync(System.Net.IPEndPoint)">
+            <summary>
+            Starts connecting to the remote host.
+            </summary>
+            <param name="endpoint">The endpoint of the remote host.</param>
+            <param name="callback">The callback that receives the connection result.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(System.IntPtr,System.Int32,System.Int32@)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="size">The size of the payload.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(System.Byte[])">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(System.Byte[],System.Int32@)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(System.Byte[],System.Int32,System.Int32@)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="length">The amount of data to send.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(System.Byte[],System.Int32,System.Int32,System.Int32@)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="length">The amount of data to sent.</param>
+            <param name="offset">The offset at which to start sending.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Send(UnityNet.Serialization.NetPacket@)">
+            <summary>
+            Sends a <see cref="T:UnityNet.Serialization.NetPacket"/> over the TcpSocket.
+            </summary>
+            <param name="packet">The packet to send.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Receive(System.IntPtr,System.Int32,System.Int32@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="size">The size of the buffer.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Receive(System.Byte[],System.Int32@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Receive(System.Byte[],System.Int32,System.Int32,System.Int32@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="size">The amount of bytes to copy.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Receive(UnityNet.Serialization.NetPacket@)">
+            <summary>
+            Copies received data into the supplied NetPacket.
+            Must be disposed after use.
+            </summary>
+            <param name="packet">Packet to copy the data into.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Receive(UnityNet.Serialization.RawPacket@)">
+            <summary>
+            Receives a <see cref="T:UnityNet.Serialization.RawPacket"/> from the <see cref="T:UnityNet.Tcp.TcpSocket"/>.
+            Must be disposed after use.
+            </summary>
+            <param name="packet">Packet that contains unmanaged memory as its data.</param>
+        </member>
+        <member name="M:UnityNet.Tcp.TcpSocket.Close">
+            <summary>
+            Disposes the TCP Connection.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.ReceiveBufferSize">
+            <summary>
+            Gets or sets the size of the receive buffer in bytes.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.SendBufferSize">
+            <summary>
+            Gets or sets the size of the send buffer in bytes.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.ReceiveTimeout">
+            <summary>
+            Gets or sets the receive time out value of the connection in milliseconds.
+            Only has an effect when the <see cref="T:UnityNet.Tcp.TcpSocket"/> is in blocking mode.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.SendTimeout">
+            <summary>
+            Gets or sets the send time out value of the connection in milliseconds.
+            Only has an effect when the <see cref="T:UnityNet.Tcp.TcpSocket"/> is in blocking mode.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.LingerState">
+            <summary>
+            Gets or sets the value of the connection's linger option.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.RemotePort">
+            <summary>
+            Get the port to which the socket is remotely connected.
+            If the socket is not connected, this property returns 0.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.LocalPort">
+            <summary>
+            The local port of the socket.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Tcp.TcpSocket.RemoteAddress">
+            <summary>
+            Get the the address to which the socket is remotely connected.
+            </summary>
+        </member>
+        <member name="F:UnityNet.Udp.UdpSocket.MaxDatagramSize">
+            <summary>
+            Maximum size of an UDP datagram.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.HasSharedBuffer">
+            <summary>
+            Returns false if the <see cref="T:UnityNet.Udp.UdpSocket"/> is not using an internal buffer.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.Blocking">
+            <summary>
+            Gets or sets a value that indicates whether the <see cref="T:UnityNet.Udp.UdpSocket"/> is in blocking mode.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.#ctor(System.Net.Sockets.AddressFamily)">
+            <summary>
+            Creates a new <see cref="T:UnityNet.Udp.UdpSocket"/> with an internal buffer.
+            </summary>
+            <param name="family">One of the System.Net.Sockets.AddressFamily values that specifies the addressing scheme of the socket.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.#ctor(System.Byte[],System.Net.Sockets.AddressFamily)">
+            <summary>
+            Creates a new <see cref="!:TcpSocket"/> with a user-defined buffer.
+            </summary>
+            <param name="buffer">The Send/Receive buffer.</param>
+            <param name="family">One of the System.Net.Sockets.AddressFamily values that specifies the addressing scheme of the socket.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Connect(UnityNet.UNetIp,System.UInt16)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Connect(System.Net.IPAddress,System.UInt16)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="address">The Ip Address of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Connect(System.String,System.UInt16)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="hostname">The hostname of the remote host.</param>
+            <param name="port">The port of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Connect(System.Net.IPEndPoint)">
+            <summary>
+            Establishes a connection to the remote host.
+            </summary>
+            <param name="endpoint">The endpoint of the remote host.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Bind(System.Int32)">
+            <summary>
+            Binds the <see cref="T:UnityNet.Udp.UdpSocket"/> to a specified port.
+            </summary>
+            <param name="port">The port to bind the <see cref="T:UnityNet.Udp.UdpSocket"/> to.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Bind(System.Net.IPEndPoint)">
+            <summary>
+            Binds the <see cref="T:UnityNet.Udp.UdpSocket"/> to a specified endpoint.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(System.IntPtr,System.Int32,System.Int32@,System.Net.IPEndPoint)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="size">The size of the payload.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(System.Byte[],System.Net.IPEndPoint)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(System.Byte[],System.Int32@,System.Net.IPEndPoint)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(System.Byte[],System.Int32,System.Int32@,System.Net.IPEndPoint)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="length">The amount of data to send.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(System.Byte[],System.Int32,System.Int32,System.Int32@,System.Net.IPEndPoint)">
+            <summary>
+            Sends data over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The payload to send.</param>
+            <param name="length">The amount of data to sent.</param>
+            <param name="offset">The offset at which to start sending.</param>
+            <param name="bytesSent">The amount of bytes that have been sent.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Send(UnityNet.Serialization.NetPacket@,System.Net.IPEndPoint)">
+            <summary>
+            Sends a <see cref="T:UnityNet.Serialization.NetPacket"/> over the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="packet">The packet to send.</param>
+            <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Receive(System.IntPtr,System.Int32,System.Int32@,System.Net.IPEndPoint@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="size">The size of the buffer.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Receive(System.Byte[],System.Int32@,System.Net.IPEndPoint@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Receive(System.Byte[],System.Int32,System.Int32,System.Int32@,System.Net.IPEndPoint@)">
+            <summary>
+            Receives raw data from the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+            <param name="data">The buffer where the received data is copied to.</param>
+            <param name="size">The amount of bytes to copy.</param>
+            <param name="receivedBytes">The amount of copied to the buffer.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Receive(UnityNet.Serialization.NetPacket@,System.Net.IPEndPoint@)">
+            <summary>
+            Copies received data into the supplied NetPacket.
+            Must be disposed after use.
+            </summary>
+            <param name="packet">Packet to copy the data into.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Receive(UnityNet.Serialization.RawPacket@,System.Net.IPEndPoint@)">
+            <summary>
+            Receives a <see cref="T:UnityNet.Serialization.RawPacket"/> from the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            Must be disposed after use.
+            </summary>
+            <param name="packet">Packet that contains unmanaged memory as its data.</param>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Close(System.Boolean)">
+            <summary>
+            Closes the UDP connection.
+            </summary>
+            <param name="reuseSocket">TRUE to create a new underlying socket. Resets all previously set socket options.</param>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.Ttl">
+            <summary>
+            Gets or sets a value that specifies the Time to Live (TTL) value of Internet
+            Protocol (IP) packets sent by the <see cref="T:UnityNet.Udp.UdpSocket"/>.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.DontFragment">
+            <summary>
+            Gets or sets a <see cref="T:System.Boolean"/> value that specifies whether the <see cref="T:UnityNet.Udp.UdpSocket"/>
+            allows Internet Protocol (IP) datagrams to be fragmented.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.MulticastLoopback">
+            <summary>
+            Gets or sets a <see cref="T:System.Boolean"/> value that specifies whether outgoing multicast
+            packets are delivered to the sending application.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.EnableBroadcast">
+            <summary>
+            Gets or sets a <see cref="T:System.Boolean"/> value that specifies whether the <see cref="T:UnityNet.Udp.UdpSocket"/>
+            may send or receive broadcast packets.
+            </summary>
+        </member>
+        <member name="P:UnityNet.Udp.UdpSocket.ExclusiveAddressUse">
+            <summary>
+            Gets or sets a <see cref="T:System.Boolean"/> value that specifies whether the <see cref="T:UnityNet.Udp.UdpSocket"/>
+            allows only one client to use a port.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Udp.UdpSocket.AllowNatTraversal(System.Boolean)">
+            <summary>
+            Enables or disables Network Address Translation (NAT) traversal on a <see cref="T:UnityNet.Udp.UdpSocket"/>
+            instance.
+            </summary>
+        </member>
+        <member name="T:UnityNet.Utils.ExceptionHelper">
+            <summary>
+            Exception messages that get logged during runtime.
+            </summary>
+        </member>
+        <member name="M:UnityNet.Utils.MathUtils.NormalizeFloat(System.Single,System.Single,System.Single,System.Int32)">
+            <summary>
+            Normalizes uniform-spaced float within min/max into uint with specified number of bits.
+            This does not preserve 0 when min = -max
+            </summary>
+        </member>
+        <member name="M:UnityNet.Utils.MathUtils.DenormalizeFloat(System.UInt32,System.Single,System.Single,System.Int32)">
+            <summary>
+            Denormalizes uint with specified number of bits into uniform-space float within min/max.
+            This does not preserve 0 when min = -max
+            </summary>
+        </member>
+        <member name="M:UnityNet.Utils.MathUtils.NormalizeFloatCenter(System.Single,System.Single,System.Single,System.Int32)">
+            <summary>
+            Normalizes uniform-spaced float within min/max into uint with specified number of bits.
+            This preserves 0 when min = -max
+            </summary>
+        </member>
+        <member name="M:UnityNet.Utils.MathUtils.DenormalizeFloatCenter(System.UInt32,System.Single,System.Single,System.Int32)">
+            <summary>
+            Denormalizes uint with specified number of bits into uniform-space float within min/max.
+            This preserves 0 when min = -max
+            </summary>
+        </member>
+    </members>
+</doc>
