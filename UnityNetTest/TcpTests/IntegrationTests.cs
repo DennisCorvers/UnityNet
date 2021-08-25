@@ -58,70 +58,72 @@ namespace UnityNetTest.TcpTests
             const string serverMessage = "HelloFromServer";
             const string clientMessage = "ResponseFromClient";
 
-            TcpListener listener = new TcpListener();
-            listener.Listen(PORT);
+            using (TcpListener listener = new TcpListener())
+            {
+                listener.Blocking = true;
+                listener.Listen(PORT);
 
-            TcpSocket clientSock = new TcpSocket();
-            var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
+                TcpSocket clientSock = new TcpSocket();
+                var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
 
-            var status = listener.Accept(out TcpSocket serverSock);
+                var status = listener.Accept(out TcpSocket serverSock);
 
-            NetPacket packet = new NetPacket();
-            NetPacket clientPacket = new NetPacket();
+                NetPacket packet = new NetPacket();
+                NetPacket clientPacket = new NetPacket();
 
-            packet.WriteString(serverMessage);
+                packet.WriteString(serverMessage);
 
-            // Send message to client.
-            Assert.AreEqual(SocketStatus.Done, serverSock.Send(ref packet));
+                // Send message to client.
+                Assert.AreEqual(SocketStatus.Done, serverSock.Send(ref packet));
 
-            // Read message from server.
-            Assert.AreEqual(SocketStatus.Done, clientSock.Receive(ref clientPacket));
-            Assert.AreEqual(serverMessage, clientPacket.ReadString());
+                // Read message from server.
+                Assert.AreEqual(SocketStatus.Done, clientSock.Receive(ref clientPacket));
+                Assert.AreEqual(serverMessage, clientPacket.ReadString());
 
-            // Send message back to server.
-            clientPacket.Clear(SerializationMode.Writing);
-            clientPacket.WriteString(clientMessage);
-            Assert.AreEqual(SocketStatus.Done, clientSock.Send(ref clientPacket));
+                // Send message back to server.
+                clientPacket.Clear(SerializationMode.Writing);
+                clientPacket.WriteString(clientMessage);
+                Assert.AreEqual(SocketStatus.Done, clientSock.Send(ref clientPacket));
 
-            // Read message from client.
-            Assert.AreEqual(SocketStatus.Done, serverSock.Receive(ref packet));
-            Assert.AreEqual(clientMessage, packet.ReadString());
+                // Read message from client.
+                Assert.AreEqual(SocketStatus.Done, serverSock.Receive(ref packet));
+                Assert.AreEqual(clientMessage, packet.ReadString());
 
-            listener.Dispose();
-            clientSock.Dispose();
-            serverSock.Dispose();
-            packet.Dispose();
-            clientPacket.Dispose();
+                clientSock.Dispose();
+                serverSock.Dispose();
+                packet.Dispose();
+                clientPacket.Dispose();
+            }
         }
 
         [Test]
         public void RejectHugePacket()
         {
-            TcpListener listener = new TcpListener
+            using (TcpListener listener = new TcpListener())
             {
-                MaximumPacketSize = 1024
-            };
+                listener.Blocking = true;
+                listener.MaximumPacketSize = 1024;
+                listener.Listen(PORT);
 
-            listener.Listen(PORT);
-            TcpSocket clientSock = new TcpSocket();
-            var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
+                TcpSocket clientSock = new TcpSocket();
+                var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
 
-            var status = listener.Accept(out TcpSocket serverSock);
-            Assert.AreEqual(SocketStatus.Done, status);
+                var status = listener.Accept(out TcpSocket serverSock);
+                Assert.AreEqual(SocketStatus.Done, status);
 
-            var largePacket = new NetPacket();
-            largePacket.WriteBytes(new byte[8192], true);
+                var largePacket = new NetPacket();
+                largePacket.WriteBytes(new byte[8192], true);
 
-            while (clientSock.Send(ref largePacket) != SocketStatus.Done) ;
+                while (clientSock.Send(ref largePacket) != SocketStatus.Done) ;
 
-            Assert.AreEqual(SocketStatus.Disconnected, serverSock.Receive(ref largePacket));
+                Assert.AreEqual(SocketStatus.Disconnected, serverSock.Receive(ref largePacket));
 
-            Assert.IsFalse(serverSock.Connected);
+                Assert.IsFalse(serverSock.Connected);
 
-            listener.Dispose();
-            clientSock.Dispose();
-            serverSock.Dispose();
-            largePacket.Dispose();
+                clientSock.Dispose();
+                serverSock.Dispose();
+                largePacket.Dispose();
+            }
         }
 
         // [Test]
@@ -134,8 +136,6 @@ namespace UnityNetTest.TcpTests
             var connectionResult = clientSock.ConnectAsync("localhost", PORT).Result;
 
             var status = listener.Accept(out TcpSocket serverSock);
-
-
 
             for (int i = 0; i < 1000000; i++)
             {

@@ -1,6 +1,6 @@
 ﻿namespace UnityNet.Serialization
 {
-    interface INetSerializable
+    public interface INetSerializable
     {
         void Serialize(ref NetPacket packet);
     }
