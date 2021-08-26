@@ -1,13 +1,13 @@
 # UnityNet
 UnityNet aims for out-of-the-box TCP connectivity without garbage generation during messaging. UnityNet uses the built-in Socket class, making it compatible with various compilation targets.
 
-**Please read the USAGE section carefuly before using UnityNet.**
+**Please read the USAGE section before using UnityNet.**
 
 Scroll below to find examples.
 
 ## Usage
-UnityNet uses two different types of packets. Both NetPacket and RawPacket are based on value-types (structs) and **must be passed by ref** at all times.
-**Disposed should be called on both types when they are no longer needed**. It is adviced to create and dispose packets in the same location, as to not cause memory leaks.
+UnityNet uses two different types of packets. NetPacket is a reference type which is [RAII compliant](https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization) and RawPacket is a value-type (struct).
+**Disposed should be called on RawPacket when they are no longer needed**.
 
 UnityNet offers the following:
 - TcpListener and TcpSocket to establish client-server communication.
@@ -97,7 +97,7 @@ When sending a NetPacket where a status of Partial returns, the send offset is s
 
 A NetPacket can be re-used multiple times, as receiving into an existing NetPacket will simply clear its internal buffer and overwrite it with the new packet.
 
-Just make sure to call Dispose on the NetPacket before it runs out of scope. If you don't, a memory leak will occur.
+Just make sure to call Dispose on the NetPacket before it runs out of scope.
 
 Please refer to [this example](https://github.com/DennisCorvers/UnityNet/blob/master/UnityNetTest/Packet/ObjectTests.cs) on how to serialize user-defined classes and structs.
 
