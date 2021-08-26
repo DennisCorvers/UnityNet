@@ -2,12 +2,12 @@
 
 namespace UnityNet.Serialization
 {
-    public unsafe partial struct NetPacket
+    public unsafe partial class NetPacket
     {
         public void Serialize<T>(ref T serializable)
             where T : INetSerializable
         {
-            serializable.Serialize(ref this);
+            serializable.Serialize(this);
         }
     }
 }

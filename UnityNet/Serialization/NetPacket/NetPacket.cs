@@ -8,7 +8,7 @@ using UnityNet.Utils;
 
 namespace UnityNet.Serialization
 {
-    public unsafe partial struct NetPacket : IDisposable
+    public unsafe partial class NetPacket : IDisposable
     {
         private const int DefaultSize = 16;
 
@@ -82,15 +82,8 @@ namespace UnityNet.Serialization
         public bool IsReading
             => m_mode == SerializationMode.Reading;
 
-        /// <summary>
-        /// Creates a <see cref="NetPacket"/> in Writing mode.
-        /// </summary>
-        /// <param name="initialSize">The initial size of the packet in bytes.</param>
-        public NetPacket(int initialSize)
+        public NetPacket()
         {
-            if (initialSize < 0)
-                ExceptionHelper.ThrowArgumentOutOfRange(nameof(initialSize));
-
             // Default all values.
             m_data = default;
             m_capacity = default;
@@ -99,8 +92,24 @@ namespace UnityNet.Serialization
             m_isInvalidated = default;
             m_mode = default;
             SendPosition = default;
+        }
+
+        /// <summary>
+        /// Creates a <see cref="NetPacket"/> in Writing mode.
+        /// </summary>
+        /// <param name="initialSize">The initial size of the packet in bytes.</param>
+        public NetPacket(int initialSize)
+            : this()
+        {
+            if (initialSize < 0)
+                ExceptionHelper.ThrowArgumentOutOfRange(nameof(initialSize));
 
             ExpandSize(initialSize * 8);
+        }
+
+        ~NetPacket()
+        {
+            Dispose();
         }
 
         /// <summary>

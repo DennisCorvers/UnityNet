@@ -3,7 +3,7 @@ using UnityNet.Compression;
 
 namespace UnityNet.Serialization
 {
-    public unsafe partial struct NetPacket
+    public unsafe partial class NetPacket
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double ReadDouble()

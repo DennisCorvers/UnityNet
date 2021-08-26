@@ -99,7 +99,7 @@ namespace UnityNetTest.Packet
                 return HashCode.Combine(Name, Age);
             }
 
-            public virtual void Serialize(ref NetPacket packet)
+            public virtual void Serialize(NetPacket packet)
             {
                 if (packet.Mode == SerializationMode.Reading)
                 {
@@ -126,9 +126,9 @@ namespace UnityNetTest.Packet
                 Height = height;
             }
 
-            public override void Serialize(ref NetPacket packet)
+            public override void Serialize(NetPacket packet)
             {
-                base.Serialize(ref packet);
+                base.Serialize(packet);
                 if (packet.IsReading)
                 {
                     Height = packet.ReadFloat();
@@ -181,7 +181,7 @@ namespace UnityNetTest.Packet
                 return HashCode.Combine(Name, Age);
             }
 
-            public void Serialize(ref NetPacket packet)
+            public void Serialize(NetPacket packet)
             {
                 if (packet.Mode == SerializationMode.Reading)
                 {

@@ -2,7 +2,7 @@
 
 namespace UnityNet.Serialization
 {
-    public unsafe partial struct NetPacket
+    public unsafe partial class NetPacket
     {
         private void WriteMemoryUnchecked(void* ptr, int byteSize)
         {

@@ -5,7 +5,7 @@ using UnityNet.Utils;
 
 namespace UnityNet.Serialization
 {
-    public unsafe partial struct NetPacket
+    public unsafe partial class NetPacket
     {
         /// <summary>
         /// Writes a string to the <see cref="NetPacket"/>. 

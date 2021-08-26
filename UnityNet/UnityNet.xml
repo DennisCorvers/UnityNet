@@ -596,6 +596,11 @@
             <param name="buffer">The Send/Receive buffer.</param>
             <param name="family">One of the System.Net.Sockets.AddressFamily values that specifies the addressing scheme of the socket.</param>
         </member>
+        <member name="M:UnityNet.Udp.UdpSocket.Available">
+            <summary>
+            Gets the amount of data that has been received from the network and is available to be read.
+            </summary>
+        </member>
         <member name="M:UnityNet.Udp.UdpSocket.Connect(UnityNet.UNetIp,System.UInt16)">
             <summary>
             Establishes a connection to the remote host.

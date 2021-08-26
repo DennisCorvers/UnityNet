@@ -8,7 +8,7 @@ using UnityEngine;
 namespace UnityNet.Serialization
 {
 #if UNITY
-    public unsafe partial struct NetPacket
+    public unsafe partial class NetPacket
     {
     #region Float-Based Read      
         public Vector2 ReadVector2()

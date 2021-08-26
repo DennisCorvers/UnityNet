@@ -2,6 +2,6 @@
 {
     public interface INetSerializable
     {
-        void Serialize(ref NetPacket packet);
+        void Serialize(NetPacket packet);
     }
 }
