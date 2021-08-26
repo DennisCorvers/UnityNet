@@ -75,6 +75,11 @@ namespace UnityNet.Udp
             CreateNewSocketIfNeeded();
         }
 
+        /// <summary>
+        /// Gets the amount of data that has been received from the network and is available to be read.
+        /// </summary>
+        public int Available()
+            => m_socket.Available;
 
         /// <summary>
         /// Establishes a connection to the remote host.
