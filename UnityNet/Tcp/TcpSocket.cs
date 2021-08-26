@@ -386,7 +386,7 @@ namespace UnityNet.Tcp
         /// Sends a <see cref="NetPacket"/> over the TcpSocket.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
-        public SocketStatus Send(ref NetPacket packet)
+        public SocketStatus Send(NetPacket packet)
         {
             if (packet.Data == null)
                 ExceptionHelper.ThrowNoData();
@@ -457,7 +457,7 @@ namespace UnityNet.Tcp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet to copy the data into.</param>
-        public SocketStatus Receive(ref NetPacket packet)
+        public SocketStatus Receive(NetPacket packet)
         {
             var status = ReceivePacket();
             if (status == SocketStatus.Done)

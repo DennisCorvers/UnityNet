@@ -271,7 +271,7 @@ namespace UnityNet.Udp
         /// </summary>
         /// <param name="packet">The packet to send.</param>
         /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
-        public SocketStatus Send(ref NetPacket packet, IPEndPoint remoteEP = null)
+        public SocketStatus Send(NetPacket packet, IPEndPoint remoteEP = null)
         {
             if (packet.Data == null)
                 ExceptionHelper.ThrowNoData();
@@ -331,7 +331,7 @@ namespace UnityNet.Udp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet to copy the data into.</param>
-        public SocketStatus Receive(ref NetPacket packet, ref IPEndPoint remoteEP)
+        public SocketStatus Receive(NetPacket packet, ref IPEndPoint remoteEP)
         {
             InnerReceive(m_buffer, MaxDatagramSize, 0, out int receivedBytes, ref remoteEP);
 

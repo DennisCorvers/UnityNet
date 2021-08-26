@@ -74,19 +74,19 @@ namespace UnityNetTest.TcpTests
                 packet.WriteString(serverMessage);
 
                 // Send message to client.
-                Assert.AreEqual(SocketStatus.Done, serverSock.Send(ref packet));
+                Assert.AreEqual(SocketStatus.Done, serverSock.Send(packet));
 
                 // Read message from server.
-                Assert.AreEqual(SocketStatus.Done, clientSock.Receive(ref clientPacket));
+                Assert.AreEqual(SocketStatus.Done, clientSock.Receive(clientPacket));
                 Assert.AreEqual(serverMessage, clientPacket.ReadString());
 
                 // Send message back to server.
                 clientPacket.Clear(SerializationMode.Writing);
                 clientPacket.WriteString(clientMessage);
-                Assert.AreEqual(SocketStatus.Done, clientSock.Send(ref clientPacket));
+                Assert.AreEqual(SocketStatus.Done, clientSock.Send(clientPacket));
 
                 // Read message from client.
-                Assert.AreEqual(SocketStatus.Done, serverSock.Receive(ref packet));
+                Assert.AreEqual(SocketStatus.Done, serverSock.Receive(packet));
                 Assert.AreEqual(clientMessage, packet.ReadString());
 
                 clientSock.Dispose();
@@ -114,9 +114,9 @@ namespace UnityNetTest.TcpTests
                 var largePacket = new NetPacket();
                 largePacket.WriteBytes(new byte[8192], true);
 
-                while (clientSock.Send(ref largePacket) != SocketStatus.Done) ;
+                while (clientSock.Send(largePacket) != SocketStatus.Done) ;
 
-                Assert.AreEqual(SocketStatus.Disconnected, serverSock.Receive(ref largePacket));
+                Assert.AreEqual(SocketStatus.Disconnected, serverSock.Receive(largePacket));
 
                 Assert.IsFalse(serverSock.Connected);
 
@@ -143,21 +143,21 @@ namespace UnityNetTest.TcpTests
 
                 var messageTo = Guid.NewGuid().ToString();
                 packet.WriteString(messageTo);
-                while (serverSock.Send(ref packet) != SocketStatus.Done) ;
+                while (serverSock.Send(packet) != SocketStatus.Done) ;
 
                 packet.Clear();
 
-                while (clientSock.Receive(ref packet) != SocketStatus.Done) ;
+                while (clientSock.Receive(packet) != SocketStatus.Done) ;
 
                 Assert.AreEqual(messageTo, packet.ReadString());
                 packet.ResetWrite();
 
                 packet.WriteString($"Message with code {messageTo} received.");
-                while (clientSock.Send(ref packet) != SocketStatus.Done) ;
+                while (clientSock.Send(packet) != SocketStatus.Done) ;
 
                 packet.Clear();
 
-                while (serverSock.Receive(ref packet) != SocketStatus.Done) ;
+                while (serverSock.Receive(packet) != SocketStatus.Done) ;
 
                 packet.Dispose();
             }
