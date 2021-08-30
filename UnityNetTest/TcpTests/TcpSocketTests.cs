@@ -30,17 +30,17 @@ namespace UnityNetTest.TcpTests
         public void NoConnectTest()
         {
             TcpSocket sock = new TcpSocket();
-            var result = sock.Connect("localhost", 1002);
-
-            Assert.AreEqual(result, SocketStatus.NotReady);
+            var result = sock.ConnectAsync("localhost", 1002).Result;
+            
+            Assert.AreEqual(result, SocketStatus.Error);
         }
 
         [Test]
         public void DoubleConnectTest()
         {
             TcpSocket sock = new TcpSocket();
-            sock.Connect("localhost", 1002);
-            var result = sock.Connect("localhost", 1002);
+            sock.ConnectAsync("localhost", 1002).Wait();
+            var result = sock.ConnectAsync("localhost", 1002).Result;
 
             Assert.AreEqual(result, SocketStatus.Error);
         }
@@ -52,7 +52,7 @@ namespace UnityNetTest.TcpTests
             sock.Close();
 
             //Never connected, so should ignore inner socket dispose
-            Assert.DoesNotThrow(() => { sock.Connect("localhost", 1002); });
+            Assert.DoesNotThrow(() => { sock.ConnectAsync("localhost", 1002).Wait(0); });
         }
 
         [Test]
@@ -61,7 +61,17 @@ namespace UnityNetTest.TcpTests
             TcpSocket sock = new TcpSocket();
             sock.Dispose();
 
-            Assert.Catch<ObjectDisposedException>(() => { sock.Connect("localhost", 1002); });
+            Assert.Catch<ObjectDisposedException>(() =>
+            {
+                try
+                {
+                    sock.ConnectAsync("localhost", 1002).Wait(0);
+                }
+                catch(AggregateException e)
+                {
+                    throw e.InnerException;
+                }
+            });
         }
     }
 }
