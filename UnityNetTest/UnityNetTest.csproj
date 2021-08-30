@@ -17,6 +17,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="UdpTests\**" />
+    <EmbeddedResource Remove="UdpTests\**" />
+    <None Remove="UdpTests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="nunit" Version="3.10.1" />
     <PackageReference Include="NUnit3TestAdapter" Version="3.10.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.8.0" />
@@ -24,10 +30,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UnityNet\UnityNet.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="UdpTests\" />
   </ItemGroup>
 
 </Project>
