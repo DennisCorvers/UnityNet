@@ -8,12 +8,11 @@ using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public unsafe sealed class TcpSocket : IDisposable
+    public unsafe sealed class TcpSocket : UNetSocket
     {
         private const int HeaderSize = sizeof(int);
 
 #pragma warning disable IDE0032, IDE0044
-        private Socket m_socket;
         private PendingPacket m_pendingPacket;
         private AddressFamily m_family;
 
@@ -24,59 +23,29 @@ namespace UnityNet.Tcp
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
-        /// Indicates whether the underlying socket is connected.
-        /// </summary>
-        public bool Connected
-            => m_socket.Connected;
-        /// <summary>
-        /// Gets or sets a value that indicates whether the <see cref="TcpSocket"/> is in blocking mode.
-        /// </summary>
-        public bool Blocking
-        {
-            get => m_socket.Blocking;
-            set => m_socket.Blocking = value;
-        }
-
-        private bool ExclusiveAddressUse
-        {
-            get { return m_socket?.ExclusiveAddressUse ?? false; }
-            set
-            {
-                if (m_socket != null)
-                {
-                    m_socket.ExclusiveAddressUse = value;
-                }
-            }
-        }
-
-
-        /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with an internal buffer.
+        /// Creates a new <see cref="TcpSocket"/>.
         /// </summary>
         public TcpSocket()
             : this(AddressFamily.Unknown)
         { }
 
         /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with an internal buffer.
+        /// Creates a new <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="family">The AddressFamily of the IP.</param>
         public TcpSocket(AddressFamily family)
+            : base(CreateSocket(ref family))
         {
-            ValidateAddressFamily(family);
             m_family = family;
-
-            InitializeClientSocket();
         }
 
         /// <summary>
         /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
-        /// Creates its own internal buffer.
         /// </summary>
         internal TcpSocket(Socket socket, int maxPacketSize)
+            : base(ConfigureSocket(socket))
         {
             m_isActive = true;
-            m_socket = ConfigureSocket(socket);
             m_maxPacketSize = maxPacketSize;
         }
 
@@ -158,12 +127,12 @@ namespace UnityNet.Tcp
             {
                 try
                 {
-                    var connectResult = m_socket.BeginConnect(endpoint, null, null);
+                    var connectResult = Socket.BeginConnect(endpoint, null, null);
                     var success = connectResult.AsyncWaitHandle.WaitOne(timeout * 1000);
 
-                    if (m_socket.Connected)
+                    if (Socket.Connected)
                     {
-                        m_family = m_socket.AddressFamily;
+                        m_family = Socket.AddressFamily;
                         m_isActive = true;
                         return SocketStatus.Done;
                     }
@@ -216,15 +185,15 @@ namespace UnityNet.Tcp
 
             var tcs = new TaskCompletionSource<SocketStatus>();
 
-            var t = m_socket.BeginConnect(hostname, port, (asyncResult) =>
+            var t = Socket.BeginConnect(hostname, port, (asyncResult) =>
             {
                 var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
 
                 try
                 {
-                    m_socket.EndConnect(asyncResult);
+                    Socket.EndConnect(asyncResult);
                     m_isActive = true;
-                    m_family = m_socket.AddressFamily;
+                    m_family = Socket.AddressFamily;
                 }
                 catch (Exception e)
                 {
@@ -233,7 +202,7 @@ namespace UnityNet.Tcp
                     return;
                 }
 
-                if (m_socket.Connected)
+                if (Socket.Connected)
                 {
                     innerTcs.TrySetResult(SocketStatus.Done);
                     return;
@@ -260,17 +229,18 @@ namespace UnityNet.Tcp
 
             ThrowIfActive();
 
+
             var tcs = new TaskCompletionSource<SocketStatus>();
 
-            m_socket.BeginConnect(endpoint, (asyncResult) =>
+            Socket.BeginConnect(endpoint, (asyncResult) =>
             {
                 var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
 
                 try
                 {
-                    m_socket.EndConnect(asyncResult);
+                    Socket.EndConnect(asyncResult);
                     m_isActive = true;
-                    m_family = m_socket.AddressFamily;
+                    m_family = Socket.AddressFamily;
                 }
                 catch (Exception e)
                 {
@@ -279,7 +249,7 @@ namespace UnityNet.Tcp
                     return;
                 }
 
-                if (m_socket.Connected)
+                if (Socket.Connected)
                 {
                     innerTcs.TrySetResult(SocketStatus.Done);
                     return;
@@ -401,6 +371,7 @@ namespace UnityNet.Tcp
             }
         }
 
+
         /// <summary>
         /// Receives raw data from the <see cref="TcpSocket"/>.
         /// </summary>
@@ -503,8 +474,8 @@ namespace UnityNet.Tcp
         {
             try
             {
-                m_socket.Connect(endpoint);
-                m_family = m_socket.AddressFamily;
+                Socket.Connect(endpoint);
+                m_family = Socket.AddressFamily;
                 m_isActive = true;
             }
             catch (SocketException e)
@@ -516,7 +487,7 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            if (m_socket.Connected)
+            if (Socket.Connected)
                 return SocketStatus.Done;
 
             return SocketStatus.Disconnected;
@@ -548,7 +519,7 @@ namespace UnityNet.Tcp
                 // This prevents clients from abusively sending huge packets and consuming a lot of server memory.
                 if (pendingPacket.Size > m_maxPacketSize)
                 {
-                    m_socket.Close();
+                    Socket.Close();
                     return SocketStatus.Disconnected;
                 }
             }
@@ -591,7 +562,7 @@ namespace UnityNet.Tcp
             int result;
             for (sent = 0; sent < size; sent += result)
             {
-                result = m_socket.Send(data, SocketFlags.None, out SocketError error);
+                result = Socket.Send(data, SocketFlags.None, out SocketError error);
 
                 // No data was sent, why?
                 if (result == 0)
@@ -610,7 +581,7 @@ namespace UnityNet.Tcp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private SocketStatus Receive(Span<byte> buffer, out int received)
         {
-            received = m_socket.Receive(buffer, SocketFlags.None, out SocketError error);
+            received = Socket.Receive(buffer, SocketFlags.None, out SocketError error);
 
             if (received > 0)
                 return SocketStatus.Done;
@@ -631,29 +602,12 @@ namespace UnityNet.Tcp
                 Dispose();
         }
 
-        private void Dispose(bool disposing)
+        protected override void Dispose(bool disposing)
         {
+            base.Dispose(disposing);
+
             if (m_isClearedUp)
                 return;
-
-            if (disposing)
-            {
-                if (m_socket != null)
-                {
-                    try
-                    {
-                        if (m_socket.Connected)
-                            m_socket.Shutdown(SocketShutdown.Both);
-                    }
-                    finally
-                    {
-                        m_socket.Close();
-                        m_socket = null;
-                    }
-                }
-
-                GC.SuppressFinalize(this);
-            }
 
             m_pendingPacket.Dispose();
 
@@ -661,27 +615,21 @@ namespace UnityNet.Tcp
             m_isActive = false;
         }
 
-        public void Dispose()
-            => Dispose(true);
-
-        ~TcpSocket()
-            => Dispose(false);
-
         /// <summary>
         /// Gets or sets the size of the receive buffer in bytes.
         /// </summary>
         public int ReceiveBufferSize
         {
-            get { return m_socket.ReceiveBufferSize; }
-            set { m_socket.ReceiveBufferSize = value; }
+            get { return Socket.ReceiveBufferSize; }
+            set { Socket.ReceiveBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the size of the send buffer in bytes.
         /// </summary>
         public int SendBufferSize
         {
-            get { return m_socket.SendBufferSize; }
-            set { m_socket.SendBufferSize = value; }
+            get { return Socket.SendBufferSize; }
+            set { Socket.SendBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the receive time out value of the connection in milliseconds.
@@ -689,8 +637,8 @@ namespace UnityNet.Tcp
         /// </summary>
         public int ReceiveTimeout
         {
-            get { return m_socket.ReceiveTimeout; }
-            set { m_socket.ReceiveTimeout = value; }
+            get { return Socket.ReceiveTimeout; }
+            set { Socket.ReceiveTimeout = value; }
         }
         /// <summary>
         /// Gets or sets the send time out value of the connection in milliseconds.
@@ -698,8 +646,8 @@ namespace UnityNet.Tcp
         /// </summary>
         public int SendTimeout
         {
-            get { return m_socket.SendTimeout; }
-            set { m_socket.SendTimeout = value; }
+            get { return Socket.SendTimeout; }
+            set { Socket.SendTimeout = value; }
         }
 
         /// <summary>
@@ -707,8 +655,8 @@ namespace UnityNet.Tcp
         /// </summary>
         public LingerOption LingerState
         {
-            get { return m_socket.LingerState; }
-            set { m_socket.LingerState = value; }
+            get { return Socket.LingerState; }
+            set { Socket.LingerState = value; }
         }
 
         /// <summary>
@@ -719,9 +667,9 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_socket.RemoteEndPoint == null)
+                if (Socket.RemoteEndPoint == null)
                     return 0;
-                return (ushort)((IPEndPoint)m_socket.RemoteEndPoint).Port;
+                return (ushort)((IPEndPoint)Socket.RemoteEndPoint).Port;
             }
         }
         /// <summary>
@@ -731,9 +679,9 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_socket.LocalEndPoint == null)
+                if (Socket.LocalEndPoint == null)
                     return 0;
-                return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
+                return (ushort)((IPEndPoint)Socket.LocalEndPoint).Port;
             }
         }
         /// <summary>
@@ -743,31 +691,42 @@ namespace UnityNet.Tcp
         {
             get
             {
-                if (m_socket.RemoteEndPoint == null)
+                if (Socket.RemoteEndPoint == null)
                     return IPAddress.None;
-                return ((IPEndPoint)m_socket.RemoteEndPoint).Address;
+                return ((IPEndPoint)Socket.RemoteEndPoint).Address;
             }
         }
 
-        private void InitializeClientSocket()
+        private static Socket CreateSocket(ref AddressFamily family)
         {
-            if (m_socket != null)
-                return;
+            ValidateAddressFamily(family);
 
-            if (m_family == AddressFamily.Unknown)
+            Socket socket;
+
+            if (family == AddressFamily.Unknown)
             {
-                m_socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
 
-                if (m_socket.AddressFamily == AddressFamily.InterNetwork)
-                    m_family = AddressFamily.InterNetwork;
+                if (socket.AddressFamily == AddressFamily.InterNetwork)
+                    family = AddressFamily.InterNetwork;
             }
             else
             {
-                m_socket = new Socket(m_family, SocketType.Stream, ProtocolType.Tcp);
+                socket = new Socket(family, SocketType.Stream, ProtocolType.Tcp);
             }
 
             // Apply TCP-specific configuration.
-            ConfigureSocket(m_socket);
+            return ConfigureSocket(socket);
+        }
+
+        private static void ValidateAddressFamily(AddressFamily family)
+        {
+            if (family != AddressFamily.InterNetwork &&
+                family != AddressFamily.InterNetworkV6 &&
+                family != AddressFamily.Unknown)
+            {
+                throw new ArgumentException("Invalid AddressFamily for TCP protocol.", nameof(family));
+            }
         }
 
         private static Socket ConfigureSocket(Socket socket)
@@ -779,6 +738,7 @@ namespace UnityNet.Tcp
 
             return socket;
         }
+
 
         private void ThrowIfDisposed()
         {
@@ -792,16 +752,6 @@ namespace UnityNet.Tcp
         {
             if (m_isActive)
                 ExceptionHelper.ThrowAlreadyActive();
-        }
-
-        private void ValidateAddressFamily(AddressFamily family)
-        {
-            if (family != AddressFamily.InterNetwork &&
-                family != AddressFamily.InterNetworkV6 &&
-                family != AddressFamily.Unknown)
-            {
-                throw new ArgumentException("Invalid AddressFamily for TCP protocol.", nameof(family));
-            }
         }
     }
 }
