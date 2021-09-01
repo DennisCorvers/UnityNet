@@ -29,6 +29,11 @@ namespace UnityNet.Serialization
         internal int SendPosition;
 
         /// <summary>
+        /// Returns the inner buffer of the NetPacket.
+        /// </summary>
+        public ReadOnlySpan<byte> Buffer
+            => new ReadOnlySpan<byte>(Data, Size);
+        /// <summary>
         /// Returns <see langword="true"/> if the previosu Read operation was successful.
         /// </summary>
         public bool IsValid
@@ -137,7 +142,7 @@ namespace UnityNet.Serialization
         /// <summary>
         /// Skips a certain number of bytes. Writes 0 bits when in write-mode.
         /// </summary>
-        /// <param name="bitCount">Amount of bits to skip</param>
+        /// <param name="byteCount">Amount of bits to skip</param>
         public void Skip(byte byteCount)
         {
             Skip(byteCount * 8);
@@ -361,11 +366,12 @@ namespace UnityNet.Serialization
             m_capacity = newByteSize * 8;
         }
 
-        internal void OnReceive(void* data, int size)
+        internal void OnReceive(ReadOnlySpan<byte> data)
         {
             // Clear packet first.
             Reset();
 
+            int size = data.Length;
             if (m_capacity < size * 8)
             {
                 int alignedSize = MathUtils.GetNextMultipleOf8(size);
@@ -377,12 +383,15 @@ namespace UnityNet.Serialization
                 // Allocate the expanded one. We don't need to preserve old data.
                 m_data = (ulong*)Memory.Alloc(alignedSize);
                 m_capacity = alignedSize * 8;
+
                 // Free rest bytes
                 Memory.ZeroMem(((byte*)m_data) + size, alignedSize - size);
             }
 
             m_size = size * 8;
-            Memory.MemCpy(data, m_data, size);
+            var sBuf = new Span<byte>(m_data, size);
+            data.CopyTo(sBuf);
+
             m_mode = SerializationMode.Reading;
         }
 

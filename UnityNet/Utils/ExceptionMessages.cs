@@ -36,6 +36,11 @@ namespace UnityNet.Utils
             throw new InvalidOperationException("Socket is already connected.");
         }
 
+        internal static void ThrowAlreadyConnected()
+        {
+            throw new InvalidOperationException("Cannot send packets to an arbitrary host while connected.");
+        }
+
         internal static void ThrowNoData()
         {
             throw new InvalidOperationException(NO_DATA);

@@ -12,8 +12,9 @@ namespace UnityNetTest.Packet
         private unsafe NetPacket CreatePacket(int size)
         {
             IntPtr mem = Memory.Alloc(size);
+            var span = new ReadOnlySpan<byte>(mem.ToPointer(), size);
             NetPacket packet = new NetPacket();
-            packet.OnReceive(mem.ToPointer(), size);
+            packet.OnReceive(span);
 
             return packet;
         }

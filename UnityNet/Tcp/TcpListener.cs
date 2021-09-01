@@ -158,7 +158,7 @@ namespace UnityNet.Tcp
         /// This function makes the socket start listening on the
         /// specified port, waiting for incoming connection attempts.
         /// </summary>
-        /// <param name="iPEndPoint">Endpoint of the interface to listen on</param>
+        /// <param name="endpoint">Endpoint of the interface to listen on</param>
         public SocketStatus Listen(IPEndPoint endpoint)
         {
             if (m_isActive)
