@@ -8,7 +8,7 @@ using UnityNet.Tcp;
 
 namespace UnityNetTest.TcpTests
 {
-    public class IntegrationTests
+    public class TcpIntegrationTests
     {
         private const int PORT = 666;
 

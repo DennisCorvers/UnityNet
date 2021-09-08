@@ -75,6 +75,11 @@ namespace UnityNet
                 return ((IPEndPoint)Socket.RemoteEndPoint).Address;
             }
         }
+        /// <summary>
+        /// Gets the local endpoint.
+        /// </summary>
+        public EndPoint LocalEndpoint
+            => m_socket.LocalEndPoint;
 
         protected Socket Socket
             => m_socket;

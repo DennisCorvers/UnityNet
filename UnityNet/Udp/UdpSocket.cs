@@ -162,7 +162,7 @@ namespace UnityNet.Udp
         /// <param name="size">The size of the payload.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
         /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
-        public SocketStatus Send(IntPtr data, int size, out int bytesSent, IPEndPoint remoteEP = null)
+        public SocketStatus Send(IntPtr data, int size, out int bytesSent, EndPoint remoteEP = null)
         {
             if (data == IntPtr.Zero)
                 ExceptionHelper.ThrowNoData();
@@ -242,7 +242,7 @@ namespace UnityNet.Udp
         /// </summary>
         /// <param name="packet">The packet to send.</param>
         /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
-        public unsafe SocketStatus Send(NetPacket packet, IPEndPoint remoteEP = null)
+        public unsafe SocketStatus Send(NetPacket packet, EndPoint remoteEP = null)
         {
             if (packet.Data == null)
                 ExceptionHelper.ThrowNoData();
@@ -318,34 +318,19 @@ namespace UnityNet.Udp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        [Obsolete("No longer works.", true)]
-        public SocketStatus Receive(ref RawPacket packet, ref IPEndPoint remoteEP)
+        public SocketStatus Receive<T>(ref T packet, ref IPEndPoint remoteEP)
+            where T : IPacket
         {
-            if (packet.Data != IntPtr.Zero)
-                ThrowNonEmptyBuffer();
-
             InnerReceive(m_buffer, MaxDatagramSize, 0, out int receivedBytes, ref remoteEP);
 
-            if (receivedBytes == 0)
-            {
-                packet = default;
-            }
-            else
-            {
-                IntPtr packetDat = Memory.Alloc(receivedBytes);
-                //Memory.MemCpy(m_buffer, 0, (void*)packetDat, receivedBytes);
-
-                packet.ReceiveInto(packetDat, receivedBytes);
-            }
+            if (receivedBytes > 0)
+                packet.Receive(new ReadOnlySpan<byte>(m_buffer, 0, receivedBytes));
 
             return SocketStatus.Done;
-
-            void ThrowNonEmptyBuffer()
-                => throw new InvalidOperationException("Packet must be empty.");
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe SocketStatus InnerSend(ReadOnlySpan<byte> data, out int bytesSent, IPEndPoint endPoint = null)
+        private unsafe SocketStatus InnerSend(ReadOnlySpan<byte> data, out int bytesSent, EndPoint endPoint = null)
         {
             ThrowIfDisposed();
 
@@ -367,7 +352,7 @@ namespace UnityNet.Udp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private unsafe int InnerSendSlow(ReadOnlySpan<byte> data, IPEndPoint endpoint)
+        private unsafe int InnerSendSlow(ReadOnlySpan<byte> data, EndPoint endpoint)
         {
             // Workaround for missing Send call with ReadOnlySpan
             var sBuf = new Span<byte>(m_buffer);
@@ -379,6 +364,12 @@ namespace UnityNet.Udp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes, ref IPEndPoint remoteEP)
         {
+            if (Available() <= 0)
+            {
+                receivedBytes = 0;
+                return SocketStatus.Done;
+            }
+
             EndPoint endpoint;
 
             if (m_family == AddressFamily.InterNetwork)

@@ -336,29 +336,21 @@ namespace UnityNet.Tcp
         /// Must be disposed after use.
         /// </summary>
         /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        public unsafe SocketStatus Receive(ref RawPacket packet)
+        public SocketStatus Receive<T>(ref T packet)
+            where T : IPacket
         {
-            if (packet.Data != IntPtr.Zero)
-                ThrowNonEmptyBuffer();
-
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                packet.ReceiveInto((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+                unsafe
+                {
+                    packet.Receive(new ReadOnlySpan<byte>(m_pendingPacket.Data, m_pendingPacket.Size));
+                }
 
-                // Reset Pending packet completely, as we've passed on its internal buffer.
-                // PendingPacket.Resize will allocate a new buffer.
-                m_pendingPacket = new PendingPacket();
+                m_pendingPacket.Dispose();
             }
-            else
-            {
-                // No complete packet received.
-                packet = default;
-            }
+
             return status;
-
-            void ThrowNonEmptyBuffer()
-                => throw new InvalidOperationException("Packet must be empty.");
         }
 
 
