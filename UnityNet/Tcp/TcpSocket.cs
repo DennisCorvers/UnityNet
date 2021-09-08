@@ -212,11 +212,24 @@ namespace UnityNet.Tcp
             int packetSize = packet.Size;
 
             // Send packet header
+            
             if (bytesSent < HeaderSize)
             {
-                byte* sendPosPtr = (byte*)&packetSize + bytesSent;
-                var status = Send(new ReadOnlySpan<byte>(sendPosPtr, HeaderSize - bytesSent), out bytesSent);
+                byte* buffer = stackalloc byte[1024];
+                var remainingHeader = HeaderSize - bytesSent;
+
+                // Copy the packet size
+                Memory.MemCpy((byte*)&packetSize + bytesSent, buffer, remainingHeader);
+
+                // Copy any remaining packet data
+                var toSend = Math.Min(packetSize, 1024 - HeaderSize + bytesSent);
+                Memory.MemCpy(packet.Data, buffer + remainingHeader, toSend);
+
+                var status = Send(new ReadOnlySpan<byte>(buffer, toSend + remainingHeader), out bytesSent);
                 packet.SendPosition = bytesSent;
+
+                if (packetSize + HeaderSize - bytesSent == 0)
+                    return SocketStatus.Done;
 
                 if (status != SocketStatus.Done)
                     return status;
