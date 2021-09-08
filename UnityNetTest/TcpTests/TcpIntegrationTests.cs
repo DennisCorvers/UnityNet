@@ -8,7 +8,7 @@ using UnityNet.Tcp;
 
 namespace UnityNetTest.TcpTests
 {
-    public class IntegrationTests
+    public class TcpIntegrationTests
     {
         private const int PORT = 666;
 
@@ -99,10 +99,9 @@ namespace UnityNetTest.TcpTests
         [Test]
         public void RejectHugePacket()
         {
-            using (TcpListener listener = new TcpListener())
+            using (TcpListener listener = new TcpListener(1024))
             {
                 listener.Blocking = true;
-                listener.MaximumPacketSize = 1024;
                 listener.Listen(PORT);
 
                 TcpSocket clientSock = new TcpSocket();

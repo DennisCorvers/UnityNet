@@ -26,16 +26,14 @@ namespace UnityNet.Tcp
         /// Client gets disconnected if the packet size exceeds this value.
         /// </summary>
         public int MaximumPacketSize
-        {
-            get => m_maxPacketSize;
-            set => m_maxPacketSize = value < 1 ? throw new ArgumentOutOfRangeException(nameof(value), "MaximumPacketSize must be at least 1.") : value;
-        }
+            => m_maxPacketSize;
 
         /// <summary>
         /// Indicates if the listener is listening on a port.
         /// </summary>
         public bool IsActive
             => m_isActive;
+
         /// <summary>
         /// Get the port to which the socket is bound locally.
         /// If the socket is not listening to a port, this property returns 0.
@@ -72,8 +70,17 @@ namespace UnityNet.Tcp
         /// Creates a <see cref="TcpListener"/>.
         /// </summary>
         public TcpListener()
+            : this(1024 * 1024 * 4) // 4MB as a default max packet size.
+        { }
+
+        /// <summary>
+        /// Creates a <see cref="TcpListener"/>.
+        /// <paramref name="maxPacketSize"/>
+        /// <param name="maxPacketSize">Defines the maximum packet size the client is allowed to send to this listener.</param>
+        public TcpListener(int maxPacketSize)
         {
             m_socket = CreateListener();
+            m_maxPacketSize = maxPacketSize < 1 ? throw new ArgumentOutOfRangeException(nameof(maxPacketSize), "MaximumPacketSize must be at least 1.") : maxPacketSize;
         }
 
         ~TcpListener()
@@ -158,7 +165,7 @@ namespace UnityNet.Tcp
         /// This function makes the socket start listening on the
         /// specified port, waiting for incoming connection attempts.
         /// </summary>
-        /// <param name="iPEndPoint">Endpoint of the interface to listen on</param>
+        /// <param name="endpoint">Endpoint of the interface to listen on</param>
         public SocketStatus Listen(IPEndPoint endpoint)
         {
             if (m_isActive)

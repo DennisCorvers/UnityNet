@@ -8,16 +8,14 @@ using UnityNet.Utils;
 
 namespace UnityNet.Tcp
 {
-    public unsafe sealed class TcpSocket : IDisposable
+    public sealed class TcpSocket : UNetSocket
     {
-        private const int BufferSize = 1024;
         private const int HeaderSize = sizeof(int);
+        private const int BlockSize = 1150;
 
 #pragma warning disable IDE0032, IDE0044
-        private Socket m_socket;
         private PendingPacket m_pendingPacket;
         private AddressFamily m_family;
-        private readonly byte[] m_buffer;
 
         private bool m_isActive;
         private bool m_isClearedUp;
@@ -26,161 +24,30 @@ namespace UnityNet.Tcp
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
-        /// Indicates whether the underlying socket is connected.
-        /// </summary>
-        public bool Connected
-            => m_socket.Connected;
-        /// <summary>
-        /// Gets or sets a value that indicates whether the <see cref="TcpSocket"/> is in blocking mode.
-        /// </summary>
-        public bool Blocking
-        {
-            get => m_socket.Blocking;
-            set => m_socket.Blocking = value;
-        }
-
-        private bool ExclusiveAddressUse
-        {
-            get { return m_socket?.ExclusiveAddressUse ?? false; }
-            set
-            {
-                if (m_socket != null)
-                {
-                    m_socket.ExclusiveAddressUse = value;
-                }
-            }
-        }
-
-
-        /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with an internal buffer.
+        /// Creates a new <see cref="TcpSocket"/>.
         /// </summary>
         public TcpSocket()
             : this(AddressFamily.Unknown)
         { }
 
         /// <summary>
-        /// Creates a new <see cref="TcpSocket"/> with an internal buffer.
+        /// Creates a new <see cref="TcpSocket"/>.
         /// </summary>
         /// <param name="family">The AddressFamily of the IP.</param>
         public TcpSocket(AddressFamily family)
+            : base(CreateSocket(ref family))
         {
-            ValidateAddressFamily(family);
-
-            m_buffer = new byte[BufferSize];
             m_family = family;
-
-            InitializeClientSocket();
         }
 
         /// <summary>
         /// Creates a new <see cref="TcpSocket"/> from an accepted Socket.
-        /// Creates its own internal buffer.
         /// </summary>
         internal TcpSocket(Socket socket, int maxPacketSize)
+            : base(ConfigureSocket(socket))
         {
             m_isActive = true;
-            m_socket = ConfigureSocket(socket);
-            m_buffer = new byte[BufferSize];
             m_maxPacketSize = maxPacketSize;
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="address">The Ip Address of the remote host.</param>
-        /// <param name="port">The port of the remote host.</param>
-        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
-        public SocketStatus Connect(UNetIp address, ushort port, int timeout = 0)
-        {
-            return Connect(new IPEndPoint(address.ToIPAddress(), port), 0);
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="address">The Ip Address of the remote host.</param>
-        /// <param name="port">The port of the remote host.</param>
-        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
-        public SocketStatus Connect(IPAddress address, ushort port, int timeout = 0)
-        {
-            return Connect(new IPEndPoint(address, port), timeout);
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="hostname">The hostname of the remote host.</param>
-        /// <param name="port">The port of the remote host.</param>
-        public SocketStatus Connect(string hostname, ushort port, int timeout = 0)
-        {
-            ThrowIfDisposed();
-
-            ThrowIfActive();
-
-            if (hostname == null)
-                throw new ArgumentNullException(nameof(hostname));
-
-            IPAddress[] addresses = null;
-            try
-            {
-                addresses = Dns.GetHostAddresses(hostname);
-            }
-            catch (SocketException)
-            {
-                Logger.Error("Unable to resolve hostname " + hostname);
-                return SocketStatus.Error;
-            }
-
-            foreach (var address in addresses)
-            {
-                if (address.AddressFamily == m_family || m_family == AddressFamily.Unknown)
-                    return Connect(new IPEndPoint(address, port), timeout);
-            }
-
-            return SocketStatus.Error;
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
-        /// <param name="endpoint">The endpoint of the remote host.</param>
-        /// <param name="timeout">The timeout in seconds to wait for a connection.</param>
-        public SocketStatus Connect(IPEndPoint endpoint, int timeout = 0)
-        {
-            ThrowIfDisposed();
-
-            ThrowIfActive();
-
-            if (endpoint == null)
-                throw new ArgumentNullException(nameof(endpoint));
-
-            if (timeout <= 0)
-            {
-                return InnerConnect(endpoint);
-            }
-            else
-            {
-                try
-                {
-                    var connectResult = m_socket.BeginConnect(endpoint, null, null);
-                    var success = connectResult.AsyncWaitHandle.WaitOne(timeout * 1000);
-
-                    if (m_socket.Connected)
-                    {
-                        m_family = m_socket.AddressFamily;
-                        m_isActive = true;
-                        return SocketStatus.Done;
-                    }
-
-                    return SocketStatus.Disconnected;
-                }
-                catch (Exception e)
-                {
-                    Logger.Error(e);
-                    return SocketStatus.Error;
-                }
-            }
         }
 
 
@@ -189,7 +56,7 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="address">The Ip Address of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public Task<SocketStatus> ConnectAsync(UNetIp address, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(UNetIp address, ushort port)
         {
             return ConnectAsync(new IPEndPoint(address.ToIPAddress(), port));
         }
@@ -199,7 +66,7 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="address">The Ip Address of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public Task<SocketStatus> ConnectAsync(IPAddress address, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(IPAddress address, ushort port)
         {
             return ConnectAsync(new IPEndPoint(address, port));
         }
@@ -209,93 +76,70 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="hostname">The hostname of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public Task<SocketStatus> ConnectAsync(string hostname, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(string hostname, ushort port)
         {
-            if (hostname == null)
-                throw new ArgumentNullException(nameof(hostname));
-
-            if (m_isClearedUp)
-                throw new ObjectDisposedException(GetType().FullName);
+            ThrowIfDisposed();
 
             ThrowIfActive();
 
-            var tcs = new TaskCompletionSource<SocketStatus>();
+            return Core();
 
-            var t = m_socket.BeginConnect(hostname, port, (asyncResult) =>
+            async ValueTask<SocketStatus> Core()
             {
-                var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
-
                 try
                 {
-                    m_socket.EndConnect(asyncResult);
-                    m_isActive = true;
-                    m_family = m_socket.AddressFamily;
+                    await Socket.ConnectAsync(hostname, port);
+                    m_family = Socket.AddressFamily;
                 }
                 catch (Exception e)
                 {
                     Logger.Error(e);
-                    innerTcs.TrySetResult(SocketStatus.Error);
-                    return;
+                    return SocketStatus.Error;
                 }
 
-                if (m_socket.Connected)
+                if (Socket.Connected)
                 {
-                    innerTcs.TrySetResult(SocketStatus.Done);
-                    return;
+                    m_isActive = true;
+                    return SocketStatus.Done;
                 }
 
-                innerTcs.TrySetResult(SocketStatus.Disconnected);
-
-            }, tcs);
-
-            return tcs.Task;
+                return SocketStatus.Disconnected;
+            }
         }
 
         /// <summary>
         /// Starts connecting to the remote host.
         /// </summary>
         /// <param name="endpoint">The endpoint of the remote host.</param>
-        /// <param name="callback">The callback that receives the connection result.</param>
-        public Task<SocketStatus> ConnectAsync(IPEndPoint endpoint)
+        public ValueTask<SocketStatus> ConnectAsync(IPEndPoint endpoint)
         {
-            if (endpoint == null)
-                throw new ArgumentNullException(nameof(endpoint));
-
-            if (m_isClearedUp)
-                throw new ObjectDisposedException(GetType().FullName);
+            ThrowIfDisposed();
 
             ThrowIfActive();
 
-            var tcs = new TaskCompletionSource<SocketStatus>();
+            return Core();
 
-            m_socket.BeginConnect(endpoint, (asyncResult) =>
+            async ValueTask<SocketStatus> Core()
             {
-                var innerTcs = (TaskCompletionSource<SocketStatus>)asyncResult.AsyncState;
-
                 try
                 {
-                    m_socket.EndConnect(asyncResult);
-                    m_isActive = true;
-                    m_family = m_socket.AddressFamily;
+                    await Socket.ConnectAsync(endpoint);
+                    m_family = Socket.AddressFamily;
                 }
                 catch (Exception e)
                 {
                     Logger.Error(e);
-                    innerTcs.TrySetResult(SocketStatus.Error);
-                    return;
+                    return SocketStatus.Error;
                 }
 
-                if (m_socket.Connected)
+                if (Socket.Connected)
                 {
-                    innerTcs.TrySetResult(SocketStatus.Done);
-                    return;
+                    m_isActive = true;
+                    return SocketStatus.Done;
                 }
 
-                innerTcs.TrySetResult(SocketStatus.Disconnected);
-
-            }, tcs);
-
-            return tcs.Task;
+                return SocketStatus.Disconnected;
+            }
         }
 
 
@@ -305,7 +149,7 @@ namespace UnityNet.Tcp
         /// <param name="data">The payload to send.</param>
         /// <param name="size">The size of the payload.</param>
         /// <param name="bytesSent">The amount of bytes that have been sent.</param>
-        public unsafe SocketStatus Send(IntPtr data, int size, out int bytesSent)
+        public SocketStatus Send(IntPtr data, int size, out int bytesSent)
         {
             bytesSent = 0;
 
@@ -315,23 +159,7 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            int result = 0;
-            for (; bytesSent < size; bytesSent += result)
-            {
-                // Copy unmanaged data to managed buffer.
-                int toSend = Math.Min(BufferSize, size - bytesSent);
-                Memory.MemCpy((byte*)data + bytesSent, m_buffer, 0, toSend);
-
-                // Send managed buffer.
-                var status = InnerSend(m_buffer, toSend, 0, out result);
-
-                // If the returned status is anything but Done, 
-                // stop sending because something went wrong.
-                if (status != SocketStatus.Done)
-                    return status;
-            }
-
-            return SocketStatus.Done;
+            return InnerSend(data.ToReadOnlySpan<byte>(size), out bytesSent);
         }
 
         /// <summary>
@@ -379,8 +207,9 @@ namespace UnityNet.Tcp
             if ((uint)(length - offset) > data.Length)
                 ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
 
-            return InnerSend(data, length, offset, out bytesSent);
+            return InnerSend(new ReadOnlySpan<byte>(data, offset, length), out bytesSent);
         }
+
 
         /// <summary>
         /// Sends a <see cref="NetPacket"/> over the TcpSocket.
@@ -388,10 +217,77 @@ namespace UnityNet.Tcp
         /// <param name="packet">The packet to send.</param>
         public SocketStatus Send(NetPacket packet)
         {
-            if (packet.Data == null)
+            return Send(packet.Buffer, ref packet.SendPosition);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="packet">The packet that contains the data to send.</param>
+        /// <returns></returns>
+        public SocketStatus Send<T>(ref T packet)
+            where T : IPacket
+        {
+            int sOffset = packet.SendOffset;
+
+            var status = Send(packet.Data, ref sOffset);
+            packet.SendOffset = sOffset;
+
+            return status;
+        }
+
+        /// <summary>
+        /// Sends data as an entire packet. Prefixes the data with 4 bytes containing the packet length.
+        /// </summary>
+        /// <param name="packet">The memory to send as an entire packet.</param>
+        /// <param name="sendPosition">The position where the send command halted. </param>
+        public unsafe SocketStatus Send(ReadOnlySpan<byte> packet, ref int sendPosition)
+        {
+            if (packet.IsEmpty)
                 ExceptionHelper.ThrowNoData();
 
-            return InnerSend(packet.Data, packet.Size, ref packet.SendPosition);
+            int packetSize = packet.Length;
+            int bytesSent = sendPosition;
+
+            // Send packet header
+            if (bytesSent < HeaderSize)
+            {
+                byte* buffer = stackalloc byte[BlockSize];
+                var remainingHeader = HeaderSize - bytesSent;
+
+                // Copy the packet size
+                Memory.MemCpy((byte*)&packetSize + bytesSent, buffer, remainingHeader);
+
+                // Copy any remaining packet data
+                var toCopy = Math.Min(packetSize, BlockSize - HeaderSize + bytesSent);
+                packet.Slice(0, toCopy).CopyTo(new Span<byte>(buffer + remainingHeader, BlockSize));
+
+                var status = InnerSend(new ReadOnlySpan<byte>(buffer, toCopy + remainingHeader), out bytesSent);
+                sendPosition = bytesSent;
+
+                if (packetSize + HeaderSize - bytesSent == 0)
+                    return SocketStatus.Done;
+
+                if (status != SocketStatus.Done)
+                    return status;
+            }
+
+            // Send packet body.
+            {
+                int sendOffset = bytesSent - HeaderSize;
+
+                var data = packet.Slice(sendOffset, packetSize - sendOffset);
+                var status = InnerSend(data, out int chunk);
+
+                if (status != SocketStatus.Done)
+                {
+                    sendPosition += chunk;
+                    return status;
+                }
+
+                sendPosition = 0;
+                return SocketStatus.Done;
+            }
         }
 
 
@@ -411,18 +307,7 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            while (receivedBytes < size)
-            {
-                // Allow a maximum receive of buffer.Length at a time.
-                var status = InnerReceive((byte*)data + receivedBytes, size - receivedBytes, out int result);
-
-                receivedBytes += result;
-
-                if (status != SocketStatus.Done)
-                    return status;
-            }
-
-            return SocketStatus.Done;
+            return InnerReceive(data.ToSpan<byte>(size), out receivedBytes);
         }
 
         /// <summary>
@@ -441,6 +326,7 @@ namespace UnityNet.Tcp
         /// <param name="data">The buffer where the received data is copied to.</param>
         /// <param name="size">The amount of bytes to copy.</param>
         /// <param name="receivedBytes">The amount of copied to the buffer.</param>
+        /// <param name="offset">The offset where to start receiving.</param>
         public SocketStatus Receive(byte[] data, int size, int offset, out int receivedBytes)
         {
             if (data == null)
@@ -449,7 +335,7 @@ namespace UnityNet.Tcp
             if ((uint)(size - offset) > data.Length)
                 ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
 
-            return InnerReceive(data, size, offset, out receivedBytes);
+            return InnerReceive(new Span<byte>(data, offset, size), out receivedBytes);
         }
 
         /// <summary>
@@ -472,65 +358,33 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Receives a <see cref="RawPacket"/> from the <see cref="TcpSocket"/>.
-        /// Must be disposed after use.
+        /// Receives a packet from the <see cref="TcpSocket"/>.
         /// </summary>
-        /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
-        public SocketStatus Receive(ref RawPacket packet)
+        /// <param name="packet">Packet to receive the data into.</param>
+        public SocketStatus Receive<T>(ref T packet)
+            where T : IPacket
         {
-            if (packet.Data != IntPtr.Zero)
-                ThrowNonEmptyBuffer();
-
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                packet.ReceiveInto((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+                unsafe
+                {
+                    packet.Receive(new ReadOnlySpan<byte>(m_pendingPacket.Data, m_pendingPacket.Size));
+                }
 
-                // Reset Pending packet completely, as we've passed on its internal buffer.
-                // PendingPacket.Resize will allocate a new buffer.
-                m_pendingPacket = new PendingPacket();
+                m_pendingPacket.Dispose();
             }
-            else
-            {
-                // No complete packet received.
-                packet = default;
-            }
+
             return status;
-
-            void ThrowNonEmptyBuffer() 
-                => throw new InvalidOperationException("Packet must be empty.");
         }
 
 
         #region Internal Methods
-        private SocketStatus InnerConnect(EndPoint endpoint)
-        {
-            try
-            {
-                m_socket.Connect(endpoint);
-                m_family = m_socket.AddressFamily;
-                m_isActive = true;
-            }
-            catch (SocketException e)
-            {
-                if (e.ErrorCode == (int)SocketError.WouldBlock)
-                    return SocketStatus.NotReady;
-
-                Logger.Error(e);
-                return SocketStatus.Error;
-            }
-
-            if (m_socket.Connected)
-                return SocketStatus.Done;
-
-            return SocketStatus.Disconnected;
-        }
-
-        private SocketStatus ReceivePacket()
+        private unsafe SocketStatus ReceivePacket()
         {
             PendingPacket pendingPacket = m_pendingPacket;
 
-            int received = 0;
+            int received;
             if (pendingPacket.SizeReceived < HeaderSize)
             {
                 // Receive packet size.
@@ -538,7 +392,7 @@ namespace UnityNet.Tcp
                 {
                     byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
 
-                    var status = InnerReceive(data, HeaderSize - pendingPacket.SizeReceived, out received);
+                    var status = InnerReceive(new Span<byte>(data, HeaderSize - pendingPacket.SizeReceived), out received);
                     pendingPacket.SizeReceived += received;
 
                     if (status != SocketStatus.Done)
@@ -552,8 +406,13 @@ namespace UnityNet.Tcp
                 // This prevents clients from abusively sending huge packets and consuming a lot of server memory.
                 if (pendingPacket.Size > m_maxPacketSize)
                 {
-                    m_socket.Close();
+                    Socket.Close();
                     return SocketStatus.Disconnected;
+                }
+                // Pre-allocate packet buffer.
+                else
+                {
+                    pendingPacket.Resize(pendingPacket.Size);
                 }
             }
 
@@ -562,14 +421,12 @@ namespace UnityNet.Tcp
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
-                int amountToReceive = Math.Min(BufferSize, pendingPacket.Size - dataReceived);
-                var status = InnerReceive(m_buffer, amountToReceive, 0, out received);
+                int amountToReceive = pendingPacket.Size - dataReceived;
+                var status = InnerReceive(new Span<byte>(pendingPacket.Data + dataReceived, amountToReceive), out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
                 if (received > 0)
                 {
-                    pendingPacket.Resize(dataReceived + received);
-                    Memory.MemCpy(m_buffer, 0, pendingPacket.Data + dataReceived, received);
                     dataReceived += received;
                 }
                 else
@@ -588,50 +445,19 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerReceive(void* data, int size, out int receivedBytes)
+        private SocketStatus InnerSend(ReadOnlySpan<byte> data, out int sent)
         {
-            int maxBytes = Math.Min(size, BufferSize);
-            receivedBytes = m_socket.Receive(m_buffer, 0, maxBytes, SocketFlags.None, out SocketError error);
-
-            if (receivedBytes > 0)
+            int size = data.Length;
+            int result;
+            for (sent = 0; sent < size; sent += result)
             {
-                Memory.MemCpy(m_buffer, 0, data, receivedBytes);
-                return SocketStatus.Done;
-            }
-
-            if (error == SocketError.Success)
-                return SocketStatus.Disconnected;
-
-            return SocketStatusMapper.Map(error);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerReceive(byte[] data, int size, int offset, out int receivedBytes)
-        {
-            receivedBytes = m_socket.Receive(data, offset, size, SocketFlags.None, out SocketError error);
-
-            if (receivedBytes > 0)
-                return SocketStatus.Done;
-
-            if (error == SocketError.Success)
-                return SocketStatus.Disconnected;
-
-            return SocketStatusMapper.Map(error);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerSend(byte[] data, int length, int offset, out int bytesSent)
-        {
-            int result = 0;
-            for (bytesSent = 0; bytesSent < length; bytesSent += result)
-            {
-                result = m_socket.Send(data, bytesSent + offset, length - bytesSent, SocketFlags.None, out SocketError error);
+                result = Socket.Send(data, SocketFlags.None, out SocketError error);
 
                 // No data was sent, why?
                 if (result == 0)
                 {
                     SocketStatus status = SocketStatusMapper.Map(error);
-                    if (status == SocketStatus.NotReady && bytesSent > 0)
+                    if (status == SocketStatus.NotReady && sent > 0)
                         return SocketStatus.Partial;
 
                     return status;
@@ -642,47 +468,17 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus InnerSend(void* data, int packetSize, ref int sendPosition)
+        private SocketStatus InnerReceive(Span<byte> buffer, out int received)
         {
-            // Send packet header (and remaining data that fits within the buffer)
-            if (sendPosition < HeaderSize)
-            {
-                byte* sendPosPtr = (byte*)&packetSize + sendPosition;
-                int sizeToCopy = Math.Min(BufferSize - HeaderSize, packetSize);
+            received = Socket.Receive(buffer, SocketFlags.None, out SocketError error);
 
-                fixed (byte* bufPtr = &m_buffer[sendPosition])
-                {
-                    Memory.MemCpy(sendPosPtr, bufPtr, HeaderSize - sendPosition);
-                    Memory.MemCpy(data, bufPtr + HeaderSize, sizeToCopy);
-                }
+            if (received > 0)
+                return SocketStatus.Done;
 
-                var status = InnerSend(m_buffer, sizeToCopy + HeaderSize, 0, out sendPosition);
+            if (error == SocketError.Success)
+                return SocketStatus.Disconnected;
 
-                if (status != SocketStatus.Done)
-                    return status;
-            }
-
-            // Send packet body.
-            int dataOffset = sendPosition - HeaderSize;
-            while (dataOffset < packetSize)
-            {
-                int toSend = Math.Min(BufferSize, packetSize - dataOffset);
-                Memory.MemCpy((byte*)data + dataOffset, m_buffer, 0, toSend);
-
-                var status = InnerSend(m_buffer, toSend, 0, out int bytesSent);
-                dataOffset += bytesSent;
-
-                if (status != SocketStatus.Done)
-                {
-                    sendPosition = dataOffset + HeaderSize;
-                    return status;
-                }
-            }
-
-            // All sends completed at this point.
-            sendPosition = 0;
-
-            return SocketStatus.Done;
+            return SocketStatusMapper.Map(error);
         }
         #endregion
 
@@ -695,29 +491,12 @@ namespace UnityNet.Tcp
                 Dispose();
         }
 
-        private void Dispose(bool disposing)
+        protected override void Dispose(bool disposing)
         {
+            base.Dispose(disposing);
+
             if (m_isClearedUp)
                 return;
-
-            if (disposing)
-            {
-                if (m_socket != null)
-                {
-                    try
-                    {
-                        if (m_socket.Connected)
-                            m_socket.Shutdown(SocketShutdown.Both);
-                    }
-                    finally
-                    {
-                        m_socket.Close();
-                        m_socket = null;
-                    }
-                }
-
-                GC.SuppressFinalize(this);
-            }
 
             m_pendingPacket.Dispose();
 
@@ -725,27 +504,21 @@ namespace UnityNet.Tcp
             m_isActive = false;
         }
 
-        public void Dispose()
-            => Dispose(true);
-
-        ~TcpSocket()
-            => Dispose(false);
-
         /// <summary>
         /// Gets or sets the size of the receive buffer in bytes.
         /// </summary>
         public int ReceiveBufferSize
         {
-            get { return m_socket.ReceiveBufferSize; }
-            set { m_socket.ReceiveBufferSize = value; }
+            get { return Socket.ReceiveBufferSize; }
+            set { Socket.ReceiveBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the size of the send buffer in bytes.
         /// </summary>
         public int SendBufferSize
         {
-            get { return m_socket.SendBufferSize; }
-            set { m_socket.SendBufferSize = value; }
+            get { return Socket.SendBufferSize; }
+            set { Socket.SendBufferSize = value; }
         }
         /// <summary>
         /// Gets or sets the receive time out value of the connection in milliseconds.
@@ -753,8 +526,8 @@ namespace UnityNet.Tcp
         /// </summary>
         public int ReceiveTimeout
         {
-            get { return m_socket.ReceiveTimeout; }
-            set { m_socket.ReceiveTimeout = value; }
+            get { return Socket.ReceiveTimeout; }
+            set { Socket.ReceiveTimeout = value; }
         }
         /// <summary>
         /// Gets or sets the send time out value of the connection in milliseconds.
@@ -762,8 +535,8 @@ namespace UnityNet.Tcp
         /// </summary>
         public int SendTimeout
         {
-            get { return m_socket.SendTimeout; }
-            set { m_socket.SendTimeout = value; }
+            get { return Socket.SendTimeout; }
+            set { Socket.SendTimeout = value; }
         }
 
         /// <summary>
@@ -771,67 +544,41 @@ namespace UnityNet.Tcp
         /// </summary>
         public LingerOption LingerState
         {
-            get { return m_socket.LingerState; }
-            set { m_socket.LingerState = value; }
+            get { return Socket.LingerState; }
+            set { Socket.LingerState = value; }
         }
 
-        /// <summary>
-        /// Get the port to which the socket is remotely connected.
-        /// If the socket is not connected, this property returns 0.
-        /// </summary>
-        public ushort RemotePort
-        {
-            get
-            {
-                if (m_socket.RemoteEndPoint == null)
-                    return 0;
-                return (ushort)((IPEndPoint)m_socket.RemoteEndPoint).Port;
-            }
-        }
-        /// <summary>
-        /// The local port of the socket.
-        /// </summary>
-        public ushort LocalPort
-        {
-            get
-            {
-                if (m_socket.LocalEndPoint == null)
-                    return 0;
-                return (ushort)((IPEndPoint)m_socket.LocalEndPoint).Port;
-            }
-        }
-        /// <summary>
-        /// Get the the address to which the socket is remotely connected.
-        /// </summary>
-        public IPAddress RemoteAddress
-        {
-            get
-            {
-                if (m_socket.RemoteEndPoint == null)
-                    return IPAddress.None;
-                return ((IPEndPoint)m_socket.RemoteEndPoint).Address;
-            }
-        }
 
-        private void InitializeClientSocket()
+        private static Socket CreateSocket(ref AddressFamily family)
         {
-            if (m_socket != null)
-                return;
+            ValidateAddressFamily(family);
 
-            if (m_family == AddressFamily.Unknown)
+            Socket socket;
+
+            if (family == AddressFamily.Unknown)
             {
-                m_socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
 
-                if (m_socket.AddressFamily == AddressFamily.InterNetwork)
-                    m_family = AddressFamily.InterNetwork;
+                if (socket.AddressFamily == AddressFamily.InterNetwork)
+                    family = AddressFamily.InterNetwork;
             }
             else
             {
-                m_socket = new Socket(m_family, SocketType.Stream, ProtocolType.Tcp);
+                socket = new Socket(family, SocketType.Stream, ProtocolType.Tcp);
             }
 
             // Apply TCP-specific configuration.
-            ConfigureSocket(m_socket);
+            return ConfigureSocket(socket);
+        }
+
+        private static void ValidateAddressFamily(AddressFamily family)
+        {
+            if (family != AddressFamily.InterNetwork &&
+                family != AddressFamily.InterNetworkV6 &&
+                family != AddressFamily.Unknown)
+            {
+                throw new ArgumentException("Invalid AddressFamily for TCP protocol.", nameof(family));
+            }
         }
 
         private static Socket ConfigureSocket(Socket socket)
@@ -843,6 +590,7 @@ namespace UnityNet.Tcp
 
             return socket;
         }
+
 
         private void ThrowIfDisposed()
         {
@@ -856,16 +604,6 @@ namespace UnityNet.Tcp
         {
             if (m_isActive)
                 ExceptionHelper.ThrowAlreadyActive();
-        }
-
-        private void ValidateAddressFamily(AddressFamily family)
-        {
-            if (family != AddressFamily.InterNetwork &&
-                family != AddressFamily.InterNetworkV6 &&
-                family != AddressFamily.Unknown)
-            {
-                throw new ArgumentException("Invalid AddressFamily for TCP protocol.", nameof(family));
-            }
         }
     }
 }

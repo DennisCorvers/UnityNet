@@ -19,13 +19,13 @@ namespace UnityNet
         [FieldOffset(0)]
         readonly uint _ipValue;
 
-        public UNetIp(byte _1, byte _2, byte _3, byte _4)
+        public UNetIp(byte octet1, byte octet2, byte octet3, byte octet4)
         {
             _ipValue = 0;
-            _octet1 = _1;
-            _octet2 = _2;
-            _octet3 = _3;
-            _octet4 = _4;
+            _octet1 = octet1;
+            _octet2 = octet2;
+            _octet3 = octet3;
+            _octet4 = octet4;
         }
 
         public IPAddress ToIPAddress()

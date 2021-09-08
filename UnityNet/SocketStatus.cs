@@ -25,6 +25,10 @@
         /// <summary>
         /// The blocking call timed-out.
         /// </summary>
-        TimedOut
+        TimedOut,
+        /// <summary>
+        /// No data was available for receiving / sending.
+        /// </summary>
+        NoData
     }
 }

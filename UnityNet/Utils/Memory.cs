@@ -143,6 +143,18 @@ namespace UnityNet.Utils
             Marshal.Copy((IntPtr)source, destination, destinationIndex, length);
 #endif
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static Span<T> ToSpan<T>(this IntPtr source, int length)
+        {
+            return new Span<T>((void*)source, length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe static ReadOnlySpan<T> ToReadOnlySpan<T>(this IntPtr source, int length)
+        {
+            return new ReadOnlySpan<T>((void*)source, length);
+        }
     }
 }
 

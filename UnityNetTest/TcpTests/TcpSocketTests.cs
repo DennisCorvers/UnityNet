@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 using UnityNet;
 using UnityNet.Tcp;
 
@@ -30,17 +31,17 @@ namespace UnityNetTest.TcpTests
         public void NoConnectTest()
         {
             TcpSocket sock = new TcpSocket();
-            var result = sock.Connect("localhost", 1002);
+            var result = sock.ConnectAsync("localhost", 1002).Result;
 
-            Assert.AreEqual(result, SocketStatus.NotReady);
+            Assert.AreEqual(result, SocketStatus.Error);
         }
 
         [Test]
-        public void DoubleConnectTest()
+        public async Task DoubleConnectTest()
         {
             TcpSocket sock = new TcpSocket();
-            sock.Connect("localhost", 1002);
-            var result = sock.Connect("localhost", 1002);
+            await sock.ConnectAsync("localhost", 1002);
+            var result = await sock.ConnectAsync("localhost", 1002);
 
             Assert.AreEqual(result, SocketStatus.Error);
         }
@@ -51,8 +52,7 @@ namespace UnityNetTest.TcpTests
             TcpSocket sock = new TcpSocket();
             sock.Close();
 
-            //Never connected, so should ignore inner socket dispose
-            Assert.DoesNotThrow(() => { sock.Connect("localhost", 1002); });
+            Assert.DoesNotThrowAsync(() => { return sock.ConnectAsync("localhost", 1002).AsTask(); });
         }
 
         [Test]
@@ -61,7 +61,7 @@ namespace UnityNetTest.TcpTests
             TcpSocket sock = new TcpSocket();
             sock.Dispose();
 
-            Assert.Catch<ObjectDisposedException>(() => { sock.Connect("localhost", 1002); });
+            Assert.CatchAsync<ObjectDisposedException>(() => { return sock.ConnectAsync("localhost", 1002).AsTask(); });
         }
     }
 }

@@ -14,7 +14,7 @@ namespace UnityNetTest.Packet
             NetPacket pack = new NetPacket();
             IntPtr data = Memory.Alloc(size);
 
-            pack.OnReceive(data.ToPointer(), size);
+            pack.OnReceive(new ReadOnlySpan<byte>(data.ToPointer(), size));
             return pack;
         }
 
@@ -42,7 +42,7 @@ namespace UnityNetTest.Packet
 
             // Must be larger than existing buffer.
             IntPtr ptr = Memory.Alloc(14);
-            pack.OnReceive(ptr.ToPointer(), 14);
+            pack.OnReceive(new ReadOnlySpan<byte>(ptr.ToPointer(), 14));
 
             Assert.IsFalse(dataPtr == (ulong)pack.Data);
             Assert.AreEqual(16, pack.Capacity);
@@ -63,13 +63,26 @@ namespace UnityNetTest.Packet
 
             // Must be smaller than existing buffer.
             IntPtr ptr = Memory.Alloc(8);
-            pack.OnReceive(ptr.ToPointer(), 8);
+            pack.OnReceive(new ReadOnlySpan<byte>(ptr.ToPointer(), 8));
 
             Assert.IsTrue(dataPtr == (ulong)pack.Data);
             Assert.AreEqual(16, pack.Capacity);
             Assert.AreEqual(8, pack.Size);
 
             pack.Dispose();
+        }
+
+        [Test]
+        public void OnReceiveReplicateTest()
+        {
+            const string test = "Replicate String Test";
+            var netPacket = new NetPacket();
+            netPacket.WriteString(test);
+
+            var pack = CreatePacket(5);
+            pack.OnReceive(netPacket.Buffer);
+
+            Assert.AreEqual(test, pack.ReadString());
         }
 
         [Test]
