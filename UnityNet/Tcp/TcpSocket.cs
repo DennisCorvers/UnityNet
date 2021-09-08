@@ -11,6 +11,7 @@ namespace UnityNet.Tcp
     public sealed class TcpSocket : UNetSocket
     {
         private const int HeaderSize = sizeof(int);
+        private const int BlockSize = 1150;
 
 #pragma warning disable IDE0032, IDE0044
         private PendingPacket m_pendingPacket;
@@ -215,14 +216,14 @@ namespace UnityNet.Tcp
             
             if (bytesSent < HeaderSize)
             {
-                byte* buffer = stackalloc byte[1024];
+                byte* buffer = stackalloc byte[BlockSize];
                 var remainingHeader = HeaderSize - bytesSent;
 
                 // Copy the packet size
                 Memory.MemCpy((byte*)&packetSize + bytesSent, buffer, remainingHeader);
 
                 // Copy any remaining packet data
-                var toSend = Math.Min(packetSize, 1024 - HeaderSize + bytesSent);
+                var toSend = Math.Min(packetSize, BlockSize - HeaderSize + bytesSent);
                 Memory.MemCpy(packet.Data, buffer + remainingHeader, toSend);
 
                 var status = Send(new ReadOnlySpan<byte>(buffer, toSend + remainingHeader), out bytesSent);
