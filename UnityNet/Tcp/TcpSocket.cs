@@ -159,7 +159,7 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            return Send(data.ToReadOnlySpan<byte>(size), out bytesSent);
+            return InnerSend(data.ToReadOnlySpan<byte>(size), out bytesSent);
         }
 
         /// <summary>
@@ -207,23 +207,49 @@ namespace UnityNet.Tcp
             if ((uint)(length - offset) > data.Length)
                 ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
 
-            return Send(new ReadOnlySpan<byte>(data, offset, length), out bytesSent);
+            return InnerSend(new ReadOnlySpan<byte>(data, offset, length), out bytesSent);
         }
+
 
         /// <summary>
         /// Sends a <see cref="NetPacket"/> over the TcpSocket.
         /// </summary>
         /// <param name="packet">The packet to send.</param>
-        public unsafe SocketStatus Send(NetPacket packet)
+        public SocketStatus Send(NetPacket packet)
         {
-            if (packet.Data == null)
+            return Send(packet.Buffer, ref packet.SendPosition);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="TcpSocket"/>.
+        /// </summary>
+        /// <param name="packet">The packet that contains the data to send.</param>
+        /// <returns></returns>
+        public SocketStatus Send<T>(ref T packet)
+            where T : IPacket
+        {
+            int sOffset = packet.SendOffset;
+
+            var status = Send(packet.Data, ref sOffset);
+            packet.SendOffset = sOffset;
+
+            return status;
+        }
+
+        /// <summary>
+        /// Sends data as an entire packet. Prefixes the data with 4 bytes containing the packet length.
+        /// </summary>
+        /// <param name="packet">The memory to send as an entire packet.</param>
+        /// <param name="sendPosition">The position where the send command halted. </param>
+        public unsafe SocketStatus Send(ReadOnlySpan<byte> packet, ref int sendPosition)
+        {
+            if (packet.IsEmpty)
                 ExceptionHelper.ThrowNoData();
 
-            int bytesSent = packet.SendPosition;
-            int packetSize = packet.Size;
+            int packetSize = packet.Length;
+            int bytesSent = sendPosition;
 
             // Send packet header
-
             if (bytesSent < HeaderSize)
             {
                 byte* buffer = stackalloc byte[BlockSize];
@@ -233,11 +259,11 @@ namespace UnityNet.Tcp
                 Memory.MemCpy((byte*)&packetSize + bytesSent, buffer, remainingHeader);
 
                 // Copy any remaining packet data
-                var toSend = Math.Min(packetSize, BlockSize - HeaderSize + bytesSent);
-                Memory.MemCpy(packet.Data, buffer + remainingHeader, toSend);
+                var toCopy = Math.Min(packetSize, BlockSize - HeaderSize + bytesSent);
+                packet.Slice(0, toCopy).CopyTo(new Span<byte>(buffer + remainingHeader, BlockSize));
 
-                var status = Send(new ReadOnlySpan<byte>(buffer, toSend + remainingHeader), out bytesSent);
-                packet.SendPosition = bytesSent;
+                var status = InnerSend(new ReadOnlySpan<byte>(buffer, toCopy + remainingHeader), out bytesSent);
+                sendPosition = bytesSent;
 
                 if (packetSize + HeaderSize - bytesSent == 0)
                     return SocketStatus.Done;
@@ -250,16 +276,16 @@ namespace UnityNet.Tcp
             {
                 int sendOffset = bytesSent - HeaderSize;
 
-                byte* data = ((byte*)packet.Data) + sendOffset;
-                var status = Send(new ReadOnlySpan<byte>(data, packetSize - sendOffset), out int chunk);
+                var data = packet.Slice(sendOffset, packetSize - sendOffset);
+                var status = InnerSend(data, out int chunk);
 
                 if (status != SocketStatus.Done)
                 {
-                    packet.SendPosition += chunk;
+                    sendPosition += chunk;
                     return status;
                 }
 
-                packet.SendPosition = 0;
+                sendPosition = 0;
                 return SocketStatus.Done;
             }
         }
@@ -281,7 +307,7 @@ namespace UnityNet.Tcp
                 return SocketStatus.Error;
             }
 
-            return Receive(data.ToSpan<byte>(size), out receivedBytes);
+            return InnerReceive(data.ToSpan<byte>(size), out receivedBytes);
         }
 
         /// <summary>
@@ -309,7 +335,7 @@ namespace UnityNet.Tcp
             if ((uint)(size - offset) > data.Length)
                 ExceptionHelper.ThrowArgumentOutOfRange(nameof(data));
 
-            return Receive(new Span<byte>(data, offset, size), out receivedBytes);
+            return InnerReceive(new Span<byte>(data, offset, size), out receivedBytes);
         }
 
         /// <summary>
@@ -332,10 +358,9 @@ namespace UnityNet.Tcp
         }
 
         /// <summary>
-        /// Receives a <see cref="RawPacket"/> from the <see cref="TcpSocket"/>.
-        /// Must be disposed after use.
+        /// Receives a packet from the <see cref="TcpSocket"/>.
         /// </summary>
-        /// <param name="packet">Packet that contains unmanaged memory as its data.</param>
+        /// <param name="packet">Packet to receive the data into.</param>
         public SocketStatus Receive<T>(ref T packet)
             where T : IPacket
         {
@@ -367,7 +392,7 @@ namespace UnityNet.Tcp
                 {
                     byte* data = (byte*)&pendingPacket.Size + pendingPacket.SizeReceived;
 
-                    var status = Receive(new Span<byte>(data, HeaderSize - pendingPacket.SizeReceived), out received);
+                    var status = InnerReceive(new Span<byte>(data, HeaderSize - pendingPacket.SizeReceived), out received);
                     pendingPacket.SizeReceived += received;
 
                     if (status != SocketStatus.Done)
@@ -397,7 +422,7 @@ namespace UnityNet.Tcp
             {
                 // Receive into buffer.
                 int amountToReceive = pendingPacket.Size - dataReceived;
-                var status = Receive(new Span<byte>(pendingPacket.Data + dataReceived, amountToReceive), out received);
+                var status = InnerReceive(new Span<byte>(pendingPacket.Data + dataReceived, amountToReceive), out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
                 if (received > 0)
@@ -420,7 +445,7 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus Send(ReadOnlySpan<byte> data, out int sent)
+        private SocketStatus InnerSend(ReadOnlySpan<byte> data, out int sent)
         {
             int size = data.Length;
             int result;
@@ -443,7 +468,7 @@ namespace UnityNet.Tcp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private SocketStatus Receive(Span<byte> buffer, out int received)
+        private SocketStatus InnerReceive(Span<byte> buffer, out int received)
         {
             received = Socket.Receive(buffer, SocketFlags.None, out SocketError error);
 

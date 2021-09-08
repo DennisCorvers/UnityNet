@@ -244,10 +244,24 @@ namespace UnityNet.Udp
         /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
         public unsafe SocketStatus Send(NetPacket packet, EndPoint remoteEP = null)
         {
-            if (packet.Data == null)
+            if (packet.Buffer.IsEmpty)
                 ExceptionHelper.ThrowNoData();
 
             return InnerSend(packet.Buffer, out _, remoteEP);
+        }
+
+        /// <summary>
+        /// Sends data over the <see cref="UdpSocket"/>.
+        /// </summary>
+        /// <param name="packet">The packet that contains the data to send.</param>
+        /// <param name="remoteEP">An System.Net.IPEndPoint that represents the host and port to which to send the datagram.</param>
+        public SocketStatus Send<T>(ref T packet, EndPoint remoteEP = null)
+            where T : IPacket
+        {
+            if (packet.Data.IsEmpty)
+                ExceptionHelper.ThrowNoData();
+
+            return InnerSend(packet.Data, out _, remoteEP);
         }
 
 
