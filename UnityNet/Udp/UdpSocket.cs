@@ -367,7 +367,7 @@ namespace UnityNet.Udp
             if (Available() <= 0)
             {
                 receivedBytes = 0;
-                return SocketStatus.Done;
+                return SocketStatus.NoData;
             }
 
             EndPoint endpoint;
