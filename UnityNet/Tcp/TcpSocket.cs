@@ -320,7 +320,7 @@ namespace UnityNet.Tcp
             var status = ReceivePacket();
             if (status == SocketStatus.Done)
             {
-                    packet.ReceiveInto((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
+                packet.ReceiveInto((IntPtr)m_pendingPacket.Data, m_pendingPacket.Size);
 
                 // Reset Pending packet completely, as we've passed on its internal buffer.
                 // PendingPacket.Resize will allocate a new buffer.
@@ -343,7 +343,7 @@ namespace UnityNet.Tcp
         {
             PendingPacket pendingPacket = m_pendingPacket;
 
-            int received = 0;
+            int received;
             if (pendingPacket.SizeReceived < HeaderSize)
             {
                 // Receive packet size.
@@ -368,22 +368,24 @@ namespace UnityNet.Tcp
                     Socket.Close();
                     return SocketStatus.Disconnected;
                 }
+                // Pre-allocate packet buffer.
+                else
+                {
+                    pendingPacket.Resize(pendingPacket.Size);
+                }
             }
 
             // Receive packet data.
             int dataReceived = pendingPacket.SizeReceived - HeaderSize;
-            byte* buffer = stackalloc byte[1024];
             while (dataReceived < pendingPacket.Size)
             {
                 // Receive into buffer.
-                int amountToReceive = Math.Min(1024, pendingPacket.Size - dataReceived);
-                var status = Receive(new Span<byte>(buffer, amountToReceive), out received);
+                int amountToReceive = pendingPacket.Size - dataReceived;
+                var status = Receive(new Span<byte>(pendingPacket.Data + dataReceived, amountToReceive), out received);
 
                 // Received greater than 0 can only occur with a SocketStatus of Done
                 if (received > 0)
                 {
-                    pendingPacket.Resize(dataReceived + received);
-                    Memory.MemCpy(buffer, pendingPacket.Data + dataReceived, received);
                     dataReceived += received;
                 }
                 else

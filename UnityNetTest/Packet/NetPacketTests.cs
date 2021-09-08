@@ -80,7 +80,7 @@ namespace UnityNetTest.Packet
             netPacket.WriteString(test);
 
             var pack = CreatePacket(5);
-            pack.OnReceive(new ReadOnlySpan<byte>(netPacket.Data, netPacket.Size));
+            pack.OnReceive(netPacket.Buffer);
 
             Assert.AreEqual(test, pack.ReadString());
         }
