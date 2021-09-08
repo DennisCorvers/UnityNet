@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Net.Sockets;
 
 namespace UnityNet
@@ -34,6 +35,44 @@ namespace UnityNet
                 {
                     m_socket.ExclusiveAddressUse = value;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Get the port to which the socket is remotely connected.
+        /// If the socket is not connected, this property returns 0.
+        /// </summary>
+        public ushort RemotePort
+        {
+            get
+            {
+                if (Socket.RemoteEndPoint == null)
+                    return 0;
+                return (ushort)((IPEndPoint)Socket.RemoteEndPoint).Port;
+            }
+        }
+        /// <summary>
+        /// The local port of the socket.
+        /// </summary>
+        public ushort LocalPort
+        {
+            get
+            {
+                if (Socket.LocalEndPoint == null)
+                    return 0;
+                return (ushort)((IPEndPoint)Socket.LocalEndPoint).Port;
+            }
+        }
+        /// <summary>
+        /// Get the the address to which the socket is remotely connected.
+        /// </summary>
+        public IPAddress RemoteAddress
+        {
+            get
+            {
+                if (Socket.RemoteEndPoint == null)
+                    return IPAddress.None;
+                return ((IPEndPoint)Socket.RemoteEndPoint).Address;
             }
         }
 

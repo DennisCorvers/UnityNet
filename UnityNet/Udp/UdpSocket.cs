@@ -2,6 +2,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
+using System.Threading.Tasks;
 using UnityNet.Serialization;
 using UnityNet.Utils;
 
@@ -20,7 +22,6 @@ namespace UnityNet.Udp
         private AddressFamily m_family = AddressFamily.InterNetwork;
 
         private bool m_isCleanedUp;
-        private bool m_hasSharedBuffer;
 #pragma warning restore IDE0032, IDE0044
 
         /// <summary>
@@ -34,7 +35,6 @@ namespace UnityNet.Udp
 
             m_buffer = new byte[MaxDatagramSize];
             m_family = family;
-            m_hasSharedBuffer = true;
         }
 
         /// <summary>
@@ -66,40 +66,6 @@ namespace UnityNet.Udp
         /// <summary>
         /// Establishes a connection to the remote host.
         /// </summary>
-        /// <param name="hostname">The hostname of the remote host.</param>
-        /// <param name="port">The port of the remote host.</param>
-        public SocketStatus Connect(string hostname, ushort port)
-        {
-            ThrowIfDisposed();
-
-            ThrowIfActive();
-
-            if (hostname == null)
-                throw new ArgumentNullException(nameof(hostname));
-
-            IPAddress[] addresses;
-            try
-            {
-                addresses = Dns.GetHostAddresses(hostname);
-            }
-            catch (SocketException)
-            {
-                Logger.Error("Unable to resolve hostname " + hostname);
-                return SocketStatus.Error;
-            }
-
-            foreach (var address in addresses)
-            {
-                if (address.AddressFamily == m_family || m_family == AddressFamily.Unknown)
-                    return Connect(new IPEndPoint(address, port));
-            }
-
-            return SocketStatus.Error;
-        }
-
-        /// <summary>
-        /// Establishes a connection to the remote host.
-        /// </summary>
         /// <param name="endpoint">The endpoint of the remote host.</param>
         public SocketStatus Connect(IPEndPoint endpoint)
         {
@@ -117,6 +83,43 @@ namespace UnityNet.Udp
             m_isActive = true;
 
             return SocketStatus.Done;
+        }
+
+        /// <summary>
+        /// Establishes a connection to the remote host.
+        /// </summary>
+        /// <param name="hostname">The hostname of the remote host.</param>
+        /// <param name="port">The port of the remote host.</param>
+        public ValueTask<SocketStatus> ConnectAsync(string hostname, ushort port)
+        {
+            ThrowIfDisposed();
+
+            ThrowIfActive();
+
+            if (hostname == null)
+                throw new ArgumentNullException(nameof(hostname));
+
+            return Core();
+
+            async ValueTask<SocketStatus> Core()
+            {
+                try
+                {
+                    await Socket.ConnectAsync(hostname, port).ConfigureAwait(false);
+                }
+                catch
+                {
+                    return SocketStatus.Error;
+                }
+
+                if (Socket.Connected)
+                {
+                    m_family = Socket.RemoteEndPoint.AddressFamily;
+                    return SocketStatus.Done;
+                }
+
+                return SocketStatus.Error;
+            }
         }
 
         /// <summary>

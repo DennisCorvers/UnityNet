@@ -56,7 +56,7 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="address">The Ip Address of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public Task<SocketStatus> ConnectAsync(UNetIp address, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(UNetIp address, ushort port)
         {
             return ConnectAsync(new IPEndPoint(address.ToIPAddress(), port));
         }
@@ -66,7 +66,7 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="address">The Ip Address of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public Task<SocketStatus> ConnectAsync(IPAddress address, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(IPAddress address, ushort port)
         {
             return ConnectAsync(new IPEndPoint(address, port));
         }
@@ -76,60 +76,70 @@ namespace UnityNet.Tcp
         /// </summary>
         /// <param name="hostname">The hostname of the remote host.</param>
         /// <param name="port">The port of the remote host.</param>
-        public async Task<SocketStatus> ConnectAsync(string hostname, ushort port)
+        public ValueTask<SocketStatus> ConnectAsync(string hostname, ushort port)
         {
             ThrowIfDisposed();
 
             ThrowIfActive();
 
-            try
-            {
-                await Socket.ConnectAsync(hostname, port);
-                m_family = Socket.AddressFamily;
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e);
-                return SocketStatus.Error;
-            }
+            return Core();
 
-            if (Socket.Connected)
+            async ValueTask<SocketStatus> Core()
             {
-                m_isActive = true;
-                return SocketStatus.Done;
-            }
+                try
+                {
+                    await Socket.ConnectAsync(hostname, port);
+                    m_family = Socket.AddressFamily;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                    return SocketStatus.Error;
+                }
 
-            return SocketStatus.Disconnected;
+                if (Socket.Connected)
+                {
+                    m_isActive = true;
+                    return SocketStatus.Done;
+                }
+
+                return SocketStatus.Disconnected;
+            }
         }
 
         /// <summary>
         /// Starts connecting to the remote host.
         /// </summary>
         /// <param name="endpoint">The endpoint of the remote host.</param>
-        public async Task<SocketStatus> ConnectAsync(IPEndPoint endpoint)
+        public ValueTask<SocketStatus> ConnectAsync(IPEndPoint endpoint)
         {
             ThrowIfDisposed();
 
             ThrowIfActive();
 
-            try
-            {
-                await Socket.ConnectAsync(endpoint);
-                m_family = Socket.AddressFamily;
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e);
-                return SocketStatus.Error;
-            }
+            return Core();
 
-            if (Socket.Connected)
+            async ValueTask<SocketStatus> Core()
             {
-                m_isActive = true;
-                return SocketStatus.Done;
-            }
+                try
+                {
+                    await Socket.ConnectAsync(endpoint);
+                    m_family = Socket.AddressFamily;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                    return SocketStatus.Error;
+                }
 
-            return SocketStatus.Disconnected;
+                if (Socket.Connected)
+                {
+                    m_isActive = true;
+                    return SocketStatus.Done;
+                }
+
+                return SocketStatus.Disconnected;
+            }
         }
 
 
@@ -213,7 +223,7 @@ namespace UnityNet.Tcp
             int packetSize = packet.Size;
 
             // Send packet header
-            
+
             if (bytesSent < HeaderSize)
             {
                 byte* buffer = stackalloc byte[BlockSize];
@@ -521,43 +531,6 @@ namespace UnityNet.Tcp
             set { Socket.LingerState = value; }
         }
 
-        /// <summary>
-        /// Get the port to which the socket is remotely connected.
-        /// If the socket is not connected, this property returns 0.
-        /// </summary>
-        public ushort RemotePort
-        {
-            get
-            {
-                if (Socket.RemoteEndPoint == null)
-                    return 0;
-                return (ushort)((IPEndPoint)Socket.RemoteEndPoint).Port;
-            }
-        }
-        /// <summary>
-        /// The local port of the socket.
-        /// </summary>
-        public ushort LocalPort
-        {
-            get
-            {
-                if (Socket.LocalEndPoint == null)
-                    return 0;
-                return (ushort)((IPEndPoint)Socket.LocalEndPoint).Port;
-            }
-        }
-        /// <summary>
-        /// Get the the address to which the socket is remotely connected.
-        /// </summary>
-        public IPAddress RemoteAddress
-        {
-            get
-            {
-                if (Socket.RemoteEndPoint == null)
-                    return IPAddress.None;
-                return ((IPEndPoint)Socket.RemoteEndPoint).Address;
-            }
-        }
 
         private static Socket CreateSocket(ref AddressFamily family)
         {
